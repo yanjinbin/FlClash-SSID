@@ -175,9 +175,7 @@ class WifiSsidPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     }
 
     private fun emitSsid() {
-        if (eventSink == null) {
-            return
-        }
+        val sink = eventSink ?: return
         val ssid = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             currentSsid()
         } else {
@@ -185,13 +183,11 @@ class WifiSsidPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             normalizeSsid(wifiManager?.connectionInfo?.ssid)
         }
         mainHandler.post {
-            val sink = eventSink ?: return@mainHandler
-            if (hasEmittedSsid && lastEmittedSsid == ssid) {
-                return@mainHandler
+            if (eventSink === sink && (!hasEmittedSsid || lastEmittedSsid != ssid)) {
+                lastEmittedSsid = ssid
+                hasEmittedSsid = true
+                sink.success(ssid)
             }
-            lastEmittedSsid = ssid
-            hasEmittedSsid = true
-            sink.success(ssid)
         }
     }
 
