@@ -1537,7 +1537,7 @@ NDK version stands in for the hook's cache.
 - `tray`: system tray for Linux, macOS and Windows. Written for FlClash; replaced the `tray_manager` fork.
 - `window`: desktop window control for Linux, macOS and Windows. Written for FlClash; replaced the
   `window_manager` fork. See below.
-- `wifi_ssid`: Wi-Fi SSID detection.
+- `wifi_ssid`: Wi-Fi SSID detection, plus the change stream that drives Wi-Fi mode automation.
 - `code_forge`: the text editor behind `EditorPage`, derived from upstream `code_forge`. See below.
 
 ## code_forge Plugin

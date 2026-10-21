@@ -73,4 +73,26 @@ void main() {
       ),
     );
   });
+
+  test('ssidChanges forwards native association changes', () async {
+    const eventsChannel = EventChannel('wifi_ssid/ssid_changes');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    MockStreamHandlerEventSink? sink;
+    messenger.setMockStreamHandler(
+      eventsChannel,
+      MockStreamHandler.inline(onListen: (arguments, events) => sink = events),
+    );
+    addTearDown(() => messenger.setMockStreamHandler(eventsChannel, null));
+
+    final received = <String?>[];
+    final subscription = manager.ssidChanges.listen(received.add);
+    await Future<void>.delayed(Duration.zero);
+    sink!.success('Office Wi-Fi');
+    sink!.success(null);
+    await Future<void>.delayed(Duration.zero);
+    await subscription.cancel();
+
+    expect(received, ['Office Wi-Fi', null]);
+  });
 }

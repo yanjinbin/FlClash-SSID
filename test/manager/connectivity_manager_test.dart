@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:fl_clash/core/controller.dart';
+import 'package:fl_clash/core/interface.dart';
 import 'package:fl_clash/manager/connectivity_manager.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
+import 'package:fl_clash/providers/core.dart';
 import 'package:fl_clash/providers/state.dart';
 import 'package:fl_clash/providers/app.dart';
 import 'package:fl_clash/providers/config.dart';
@@ -13,15 +16,42 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:wifi_ssid/wifi_ssid.dart';
+
+class _MockCoreHandlerInterface extends Mock implements CoreHandlerInterface {}
 
 void main() {
   late ProviderContainer container;
   late StreamController<List<ConnectivityResult>> connectivity;
+  late _MockCoreHandlerInterface core;
+
+  setUpAll(() {
+    registerFallbackValue(
+      const UpdateParams(
+        tun: Tun(),
+        mixedPort: 7890,
+        allowLan: false,
+        findProcessMode: FindProcessMode.off,
+        mode: Mode.rule,
+        logLevel: LogLevel.info,
+        ipv6: false,
+        tcpConcurrent: false,
+        externalController: ExternalControllerStatus.close,
+        unifiedDelay: false,
+      ),
+    );
+  });
 
   setUp(() {
+    core = _MockCoreHandlerInterface();
+    when(() => core.updateConfig(any())).thenAnswer((_) async => '');
+    when(() => core.closeConnections()).thenAnswer((_) async => true);
     container = ProviderContainer(
-      overrides: [currentProfileProvider.overrideWithValue(null)],
+      overrides: [
+        currentProfileProvider.overrideWithValue(null),
+        coreHandlerProvider.overrideWithValue(CoreController.scoped(core)),
+      ],
     );
     container.listen(configProvider, (_, _) {});
     globalState.container = container;
@@ -43,6 +73,7 @@ void main() {
     required SsidReader readSsid,
     void Function(List<ConnectivityResult>)? onConnectivityChanged,
     Future<List<ConnectivityResult>> Function()? checkConnectivity,
+    Stream<String?>? ssidChanges,
     List<String> excludeSSIDs = const ['Home'],
   }) async {
     await tester.pumpWidget(
@@ -51,6 +82,7 @@ void main() {
         child: ConnectivityManager(
           connectivityStream: connectivity.stream,
           readSsid: readSsid,
+          ssidChanges: ssidChanges ?? const Stream.empty(),
           checkConnectivity: checkConnectivity,
           onConnectivityChanged: onConnectivityChanged,
           child: const SizedBox.shrink(),
@@ -394,6 +426,111 @@ void main() {
     ssid = 'Office';
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
+    expect(currentMode(), Mode.global);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a native SSID event switches mode without waiting for a poll', (
+    tester,
+  ) async {
+    final changes = StreamController<String?>.broadcast();
+    addTearDown(changes.close);
+    var ssid = 'ASUS395';
+    await pumpManager(
+      tester,
+      readSsid: () async => ssid,
+      ssidChanges: changes.stream,
+      excludeSSIDs: [],
+    );
+    await enableModes(tester);
+    connectivity.add([ConnectivityResult.wifi]);
+    await tester.pumpAndSettle();
+    expect(currentMode(), Mode.direct);
+    clearInteractions(core);
+
+    ssid = 'Office';
+    changes.add('Office');
+    await tester.pump();
+
+    expect(currentMode(), Mode.global);
+    verify(() => core.closeConnections()).called(1);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('the fallback lands before a slow SSID read finishes', (
+    tester,
+  ) async {
+    final changes = StreamController<String?>.broadcast();
+    addTearDown(changes.close);
+    Completer<String?>? gate;
+    await pumpManager(
+      tester,
+      readSsid: () => gate?.future ?? Future.value('ASUS395'),
+      ssidChanges: changes.stream,
+      excludeSSIDs: [],
+    );
+    await enableModes(tester);
+    connectivity.add([ConnectivityResult.wifi]);
+    await tester.pumpAndSettle();
+    expect(currentMode(), Mode.direct);
+    clearInteractions(core);
+
+    gate = Completer<String?>();
+    changes.add('Office');
+    await tester.pump();
+
+    expect(
+      currentMode(),
+      Mode.rule,
+      reason: 'the event applies the fallback before the read resolves',
+    );
+    verifyNever(() => core.closeConnections());
+
+    gate.complete('Office');
+    await tester.pumpAndSettle();
+
+    expect(currentMode(), Mode.global);
+    verify(() => core.closeConnections()).called(1);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('the one second poll catches a change the native event missed', (
+    tester,
+  ) async {
+    var ssid = 'ASUS395';
+    await pumpManager(tester, readSsid: () async => ssid, excludeSSIDs: []);
+    await enableModes(tester);
+    connectivity.add([ConnectivityResult.wifi]);
+    await tester.pumpAndSettle();
+    expect(currentMode(), Mode.direct);
+
+    ssid = 'Office';
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(currentMode(), Mode.global);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('polling backs off once the network has been quiet a while', (
+    tester,
+  ) async {
+    var ssid = 'ASUS395';
+    await pumpManager(tester, readSsid: () async => ssid, excludeSSIDs: []);
+    await enableModes(tester);
+    connectivity.add([ConnectivityResult.wifi]);
+    await tester.pumpAndSettle();
+    expect(currentMode(), Mode.direct);
+
+    await tester.pump(const Duration(seconds: 31));
+    ssid = 'Office';
+    await tester.pump(const Duration(seconds: 2));
+    expect(
+      currentMode(),
+      Mode.direct,
+      reason: 'the idle poll runs every five seconds',
+    );
+
+    await tester.pump(const Duration(seconds: 4));
     expect(currentMode(), Mode.global);
     await tester.pumpWidget(const SizedBox.shrink());
   });

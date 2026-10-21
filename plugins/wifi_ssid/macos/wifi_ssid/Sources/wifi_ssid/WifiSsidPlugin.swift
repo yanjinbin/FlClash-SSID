@@ -3,7 +3,9 @@ import CoreLocation
 import CoreWLAN
 import FlutterMacOS
 
-public class WifiSsidPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate {
+public class WifiSsidPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate, CWEventDelegate,
+    FlutterStreamHandler
+{
 
     // Both talk to system daemons (locationd, wifid) on creation, so they are
     // not built until Dart asks for the SSID or the permission.
@@ -15,6 +17,7 @@ public class WifiSsidPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate 
     private lazy var wifiClient = CWWiFiClient.shared()
     private let ssidQueue = DispatchQueue(label: "com.follow.clash.wifi_ssid")
     private var pendingPermissionResults: [FlutterResult] = []
+    private var eventSink: FlutterEventSink?
 
     private enum Method {
         static let getSsid = "getSsid"
@@ -28,6 +31,10 @@ public class WifiSsidPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate 
         )
         let instance = WifiSsidPlugin()
         registrar.addMethodCallDelegate(instance, channel: channel)
+        let events = FlutterEventChannel(
+            name: "wifi_ssid/ssid_changes", binaryMessenger: registrar.messenger
+        )
+        events.setStreamHandler(instance)
     }
 
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -115,5 +122,44 @@ public class WifiSsidPlugin: NSObject, FlutterPlugin, CLLocationManagerDelegate 
                 result(ssid)
             }
         }
+    }
+
+    // MARK: - SSID changes
+
+    public func onListen(
+        withArguments arguments: Any?,
+        eventSink events: @escaping FlutterEventSink
+    ) -> FlutterError? {
+        eventSink = events
+        wifiClient.delegate = self
+        try? wifiClient.startMonitoringEvent(with: .ssidDidChange)
+        return nil
+    }
+
+    public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        eventSink = nil
+        try? wifiClient.stopMonitoringEvent(with: .ssidDidChange)
+        wifiClient.delegate = nil
+        return nil
+    }
+
+    public func ssidDidChangeForWiFiInterface(withName interfaceName: String) {
+        if #available(macOS 14, *) {
+            guard mapAuthStatus(locationManager.authorizationStatus) == .granted else {
+                emit(nil)
+                return
+            }
+        }
+        let client = wifiClient
+        ssidQueue.async { [weak self] in
+            let ssid = client.interface()?.ssid()
+            DispatchQueue.main.async {
+                self?.emit(ssid)
+            }
+        }
+    }
+
+    private func emit(_ ssid: String?) {
+        eventSink?(ssid)
     }
 }

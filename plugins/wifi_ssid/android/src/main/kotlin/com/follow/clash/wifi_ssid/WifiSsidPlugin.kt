@@ -2,7 +2,10 @@ package com.follow.clash.wifi_ssid
 
 import android.Manifest
 import android.app.Activity
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
@@ -19,6 +22,7 @@ import androidx.core.content.edit
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -28,6 +32,11 @@ import java.util.concurrent.ConcurrentHashMap
 
 class WifiSsidPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private lateinit var channel: MethodChannel
+    private var eventChannel: EventChannel? = null
+    private var eventSink: EventChannel.EventSink? = null
+    private var lastEmittedSsid: String? = null
+    private var hasEmittedSsid = false
+    private var ssidReceiver: BroadcastReceiver? = null
     private var context: Context? = null
     private var activity: Activity? = null
     private var wifiManager: WifiManager? = null
@@ -72,6 +81,7 @@ class WifiSsidPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     companion object {
         private const val CHANNEL_NAME = "wifi_ssid"
+        private const val EVENTS_CHANNEL_NAME = "wifi_ssid/ssid_changes"
         private const val METHOD_GET_SSID = "getSsid"
         private const val METHOD_CHECK_PERMISSION = "checkPermission"
         private const val METHOD_REQUEST_PERMISSION = "requestPermission"
@@ -93,6 +103,9 @@ class WifiSsidPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         context = binding.applicationContext
         channel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
         channel.setMethodCallHandler(this)
+        eventChannel = EventChannel(binding.binaryMessenger, EVENTS_CHANNEL_NAME).also {
+            it.setStreamHandler(ssidStreamHandler)
+        }
         wifiManager = binding.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
         connectivityManager = binding.applicationContext.getSystemService(
             Context.CONNECTIVITY_SERVICE,
@@ -107,6 +120,10 @@ class WifiSsidPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             errorMessage = "Plugin detached before SSID lookup completed",
         )
         channel.setMethodCallHandler(null)
+        eventChannel?.setStreamHandler(null)
+        eventChannel = null
+        eventSink = null
+        unregisterSsidReceiver()
         unregisterWifiNetworkCallback()
         detachFromActivity(cancelPermissionRequest = true)
         context = null
@@ -140,6 +157,65 @@ class WifiSsidPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             METHOD_REQUEST_PERMISSION -> requestPermission(result)
             else -> result.notImplemented()
         }
+    }
+
+    private val ssidStreamHandler = object : EventChannel.StreamHandler {
+        override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+            eventSink = events
+            lastEmittedSsid = null
+            hasEmittedSsid = false
+            registerSsidReceiver()
+            registerWifiNetworkCallback()
+        }
+
+        override fun onCancel(arguments: Any?) {
+            eventSink = null
+            unregisterSsidReceiver()
+        }
+    }
+
+    private fun emitSsid() {
+        if (eventSink == null) {
+            return
+        }
+        val ssid = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            currentSsid()
+        } else {
+            @Suppress("DEPRECATION")
+            normalizeSsid(wifiManager?.connectionInfo?.ssid)
+        }
+        mainHandler.post {
+            val sink = eventSink ?: return@mainHandler
+            if (hasEmittedSsid && lastEmittedSsid == ssid) {
+                return@mainHandler
+            }
+            lastEmittedSsid = ssid
+            hasEmittedSsid = true
+            sink.success(ssid)
+        }
+    }
+
+    // Before S the network callback path does not exist, so association changes
+    // arrive as a broadcast instead.
+    private fun registerSsidReceiver() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S || ssidReceiver != null) {
+            return
+        }
+        val ctx = context ?: return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                emitSsid()
+            }
+        }
+        runCatching {
+            ctx.registerReceiver(receiver, IntentFilter(WifiManager.NETWORK_STATE_CHANGED_ACTION))
+        }.onSuccess { ssidReceiver = receiver }
+    }
+
+    private fun unregisterSsidReceiver() {
+        val receiver = ssidReceiver ?: return
+        ssidReceiver = null
+        runCatching { context?.unregisterReceiver(receiver) }
     }
 
     private fun checkPermission(result: Result) {
@@ -356,6 +432,7 @@ class WifiSsidPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 } else {
                     wifiInfoByNetwork[network] = wifiInfo
                 }
+                emitSsid()
                 if (!hasPendingSsid) {
                     return
                 }
@@ -368,6 +445,7 @@ class WifiSsidPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
             override fun onLost(network: Network) {
                 wifiInfoByNetwork.remove(network)
+                emitSsid()
             }
         }
         val request = NetworkRequest.Builder()

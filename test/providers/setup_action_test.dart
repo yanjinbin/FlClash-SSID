@@ -859,6 +859,50 @@ void main() {
 
       expect(params.externalController, ExternalControllerStatus.close);
     });
+
+    test(
+      'an automated mode change drops the flows matched under the old one',
+      () async {
+        final core = _MockCoreHandlerInterface();
+        when(() => core.updateConfig(any())).thenAnswer((_) async => '');
+        when(() => core.closeConnections()).thenAnswer((_) async => true);
+        final scopedAction = TestSetupAction();
+        final scoped = ProviderContainer(
+          overrides: [
+            profilesProvider.overrideWith(TestProfiles.new),
+            setupActionProvider.overrideWith(() => scopedAction),
+            coreHandlerProvider.overrideWithValue(CoreController.scoped(core)),
+          ],
+        );
+        addTearDown(scoped.dispose);
+        scoped.read(setupActionProvider.notifier);
+
+        scopedAction.changeMode(Mode.direct, dropConnections: true);
+        await scopedAction.updateConfig();
+
+        verify(() => core.closeConnections()).called(1);
+      },
+    );
+
+    test('a manual mode change leaves live connections alone', () async {
+      final core = _MockCoreHandlerInterface();
+      when(() => core.updateConfig(any())).thenAnswer((_) async => '');
+      final scopedAction = TestSetupAction();
+      final scoped = ProviderContainer(
+        overrides: [
+          profilesProvider.overrideWith(TestProfiles.new),
+          setupActionProvider.overrideWith(() => scopedAction),
+          coreHandlerProvider.overrideWithValue(CoreController.scoped(core)),
+        ],
+      );
+      addTearDown(scoped.dispose);
+      scoped.read(setupActionProvider.notifier);
+
+      scopedAction.changeMode(Mode.rule);
+      await scopedAction.updateConfig();
+
+      verifyNever(() => core.closeConnections());
+    });
   });
 
   group('recoverMissingProfile', () {

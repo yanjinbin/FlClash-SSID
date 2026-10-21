@@ -9,9 +9,18 @@ class WifiSsidManager {
   static final WifiSsidManager instance = WifiSsidManager._();
 
   static const _channel = MethodChannel('wifi_ssid');
+  static const _ssidChangesChannel = EventChannel('wifi_ssid/ssid_changes');
   static const _getSsidMethod = 'getSsid';
   static const _checkPermissionMethod = 'checkPermission';
   static const _requestPermissionMethod = 'requestPermission';
+
+  /// Emits the SSID whenever the platform notices an association change.
+  ///
+  /// Platforms without a native watcher leave the stream with a missing
+  /// plugin error; callers fall back to reading [getSsid] on their own.
+  Stream<String?> get ssidChanges => _ssidChangesChannel
+      .receiveBroadcastStream()
+      .map((event) => event as String?);
 
   /// Returns the current WiFi SSID, or null if not connected to WiFi.
   Future<String?> getSsid() {

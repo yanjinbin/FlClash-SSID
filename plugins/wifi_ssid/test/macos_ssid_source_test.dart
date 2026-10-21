@@ -97,4 +97,15 @@ void main() {
       reason: 'CoreWLAN only requires location authorization on macOS 14+',
     );
   });
+
+  test('macOS forwards SSID changes instead of relying on a poll', () {
+    expect(pluginSource, contains('wifi_ssid/ssid_changes'));
+    expect(pluginSource, contains('ssidDidChangeForWiFiInterface'));
+    expect(
+      pluginSource,
+      contains('startMonitoringEvent(with: .ssidDidChange)'),
+    );
+    expect(pluginSource, contains('wifiClient.delegate = self'));
+    expect(pluginSource, contains('wifiClient.delegate = nil'));
+  });
 }

@@ -39,6 +39,7 @@ class SetupAction extends _$SetupAction {
   DateTime? _startTime;
   _SetupInputs? _appliedInputs;
   var _pendingForceApply = false;
+  var _pendingDropConnections = false;
 
   bool get _isRunning => _startTime != null && _startTime!.isBeforeNow;
 
@@ -309,6 +310,8 @@ class SetupAction extends _$SetupAction {
 
   @visibleForTesting
   Future<void> updateConfig() async {
+    final dropConnections = _pendingDropConnections;
+    _pendingDropConnections = false;
     await globalState.safeRun(() async {
       final patchConfig = ref.read(patchClashConfigProvider);
       final shouldContinueSetup = await requestAdmin(patchConfig.tun.enable);
@@ -325,6 +328,18 @@ class SetupAction extends _$SetupAction {
       );
       if (message.isNotEmpty) throw MessageException(message);
     });
+    if (!dropConnections) {
+      return;
+    }
+    // A flow keeps the mode it matched under, so automation drops them here.
+    try {
+      await _core.closeConnections();
+    } catch (error) {
+      commonPrint.log(
+        'Unable to drop connections after a mode change: $error',
+        logLevel: LogLevel.warning,
+      );
+    }
   }
 
   void applyProfileDebounce({bool silence = false, bool force = false}) {
@@ -336,7 +351,11 @@ class SetupAction extends _$SetupAction {
     }, args: [silence]);
   }
 
-  void changeMode(Mode mode) {
+  void changeMode(
+    Mode mode, {
+    bool dropConnections = false,
+    bool immediate = false,
+  }) {
     ref
         .read(patchClashConfigProvider.notifier)
         .update((state) => state.copyWith(mode: mode));
@@ -345,6 +364,14 @@ class SetupAction extends _$SetupAction {
           .read(proxiesActionProvider.notifier)
           .updateCurrentGroupName(GroupName.GLOBAL.name);
     }
+    if (dropConnections) {
+      _pendingDropConnections = true;
+    }
+    if (!dropConnections && !immediate) {
+      return;
+    }
+    debouncer.cancel(FunctionTag.updateConfig);
+    unawaited(updateConfig());
   }
 
   /// For leaving an editor: a profile whose inputs match the config the Core
