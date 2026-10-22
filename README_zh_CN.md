@@ -6,14 +6,15 @@
 
 基于 ClashMeta 的多平台代理客户端，简单易用，开源无广告。
 
+这是 [FlClash](https://github.com/chen08209/FlClash) 的个人分支，额外增加了若干桌面端行为，见[分支改动](#分支改动)。
+
 [English](README.md) · **简体中文**
 
-[![Release](https://img.shields.io/github/v/release/chen08209/FlClash?style=flat-square&label=release)](https://github.com/chen08209/FlClash/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/chen08209/FlClash/total?style=flat-square&logo=github)](https://github.com/chen08209/FlClash/releases)
-[![License](https://img.shields.io/github/license/chen08209/FlClash?style=flat-square)](LICENSE)
-[![Telegram](https://img.shields.io/badge/Telegram-channel-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://t.me/FlClash)
+[![Release](https://img.shields.io/github/v/release/yanjinbin/FlClash-SSID?style=flat-square&label=release)](https://github.com/yanjinbin/FlClash-SSID/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/yanjinbin/FlClash-SSID/total?style=flat-square&logo=github)](https://github.com/yanjinbin/FlClash-SSID/releases)
+[![License](https://img.shields.io/github/license/yanjinbin/FlClash-SSID?style=flat-square)](LICENSE)
 
-[官网](https://chen08209.github.io/FlClash/zh) · [下载](#下载) · [更新日志](CHANGELOG.md) · [从源码构建](#从源码构建)
+[发布页](https://github.com/yanjinbin/FlClash-SSID/releases/latest) · [下载](#下载) · [更新日志](CHANGELOG.md) · [从源码构建](#从源码构建)
 
 </div>
 
@@ -35,28 +36,35 @@
 - **平台细节**：Android 上有快捷设置磁贴、分应用代理和 Android TV 支持；桌面端有托盘菜单和全局快捷键。
 - **开源无广告**，以 GPL-3.0 协议发布。
 
+## 分支改动
+
+- **Wi-Fi SSID 规则**：按 SSID 指定分流模式，其余网络走 fallback（例如家里直连、其他网络走规则）。切换由系统
+  SSID 事件驱动，漏掉的事件由短轮询兜底；检测到关联变化时先切 fallback 再读新 SSID，并断开已有连接，避免旧
+  连接继续沿用上一个网络的模式。
+- **系统代理与 TUN 网卡**各自独立开关。
+- 宽窗口下可以**添加和隐藏仪表盘卡片**。
+- macOS 可以**隐藏菜单栏图标**。
+- 修复桌面端拖拽崩溃。
+
 ## 下载
 
-从 [GitHub Releases](https://github.com/chen08209/FlClash/releases/latest) 获取最新版本，或打开
-[官网](https://chen08209.github.io/FlClash/zh#download)，它会自动为你的设备选好安装包。
+从 [GitHub Releases](https://github.com/yanjinbin/FlClash-SSID/releases/latest) 获取最新版本。
 
 | 平台 | 安装包 | 说明 |
 | --- | --- | --- |
-| Android | `arm64-v8a`、`armeabi-v7a`、`x86_64` 三种 APK | 绝大多数手机选 `arm64-v8a`。也可以通过下方的 F-Droid 仓库安装。 |
+| Android | `arm64-v8a`、`armeabi-v7a`、`x86_64` 三种 APK | 绝大多数手机选 `arm64-v8a`。 |
 | Windows 10 及以上 | 安装版（`.exe`）或便携版（`.zip`），分 x64 与 ARM64 | 骁龙等 ARM 架构笔记本选 ARM64。 |
 | macOS 12 及以上 | Apple Silicon 与 Intel 两种 DMG | 也可以通过 Homebrew 安装。 |
 | Linux | `.deb`、`.rpm` 和 AppImage，分 x64 与 ARM64 | 托盘依赖见下方说明。 |
 
 <p>
-  <a href="https://chen08209.github.io/FlClash-fdroid-repo/repo?fingerprint=789D6D32668712EF7672F9E58DEEB15FBD6DCEEC5AE7A4371EA72F2AAE8A12FD"><img alt="Get it on F-Droid" src="snapshots/get-it-on-fdroid.svg" height="56"></a>
-  <a href="https://github.com/chen08209/FlClash/releases/latest"><img alt="Get it on GitHub" src="snapshots/get-it-on-github.svg" height="56"></a>
+  <a href="https://github.com/yanjinbin/FlClash-SSID/releases/latest"><img alt="Get it on GitHub" src="snapshots/get-it-on-github.svg" height="56"></a>
 </p>
 
 **Homebrew**
 
 ```bash
-brew tap chen08209/tap
-brew install --cask flclash
+brew install --cask yanjinbin/tap/flclash-ssid
 ```
 
 **Linux 托盘图标**
@@ -96,8 +104,8 @@ adb shell am start -a com.follow.clash.action.TOGGLE
 以及通过 rustup 安装的 [Rust](https://rustup.rs/)。桌面端需要在对应系统上构建，Android 在任意系统上都能构建。
 
 ```bash
-git clone --recursive https://github.com/chen08209/FlClash.git
-cd FlClash
+git clone --recursive https://github.com/yanjinbin/FlClash-SSID.git
+cd FlClash-SSID
 flutter pub get
 dart setup.dart android   # 或 windows、macos、linux
 ```
@@ -115,16 +123,9 @@ dart setup.dart android   # 或 windows、macos、linux
 
 ## 支持
 
-给仓库点一个 Star 是支持项目最简单的方式。问题讨论和更新通知请关注 [Telegram 频道](https://t.me/FlClash)，
-Bug 与功能建议请提交到 [GitHub Issues](https://github.com/chen08209/FlClash/issues)。
-
-<a href="https://star-history.com/#chen08209/FlClash&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=chen08209/FlClash&type=Date&theme=dark">
-    <img alt="Star history" src="https://api.star-history.com/svg?repos=chen08209/FlClash&type=Date" width="640">
-  </picture>
-</a>
+Bug 与功能建议请提交到 [GitHub Issues](https://github.com/yanjinbin/FlClash-SSID/issues)。上游项目在
+[chen08209/FlClash](https://github.com/chen08209/FlClash)。
 
 ## 许可证
 
-FlClash 以 [GPL-3.0 协议](LICENSE)发布。
+FlClash 以 [GPL-3.0 协议](LICENSE)发布，本分支沿用同一协议。
