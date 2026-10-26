@@ -218,6 +218,10 @@ void main() {
     final service = rectOf(tester, ServiceStatusCard);
     final memory = rectOf(tester, MemoryInfo);
     expect(service.width, closeTo(upload.width, 0.01));
+    expect(
+      tester.widget<ServiceStatusCard>(find.byType(ServiceStatusCard)).columns,
+      2,
+    );
     expect(memory.top, service.top);
     expect(memory.left, closeTo(service.right + 16, 0.01));
     expect(

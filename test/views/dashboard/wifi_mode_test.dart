@@ -2,6 +2,7 @@ import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/state.dart';
+import 'package:fl_clash/ui/ui.dart';
 import 'package:fl_clash/views/dashboard/widgets/wifi_mode.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -76,7 +77,7 @@ void main() {
     tester,
   ) async {
     await pumpCard(tester);
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.byType(CommonSwitch));
     await tester.pumpAndSettle();
     expect(container.read(wifiModeSettingProvider).enabled, isTrue);
 
@@ -85,7 +86,7 @@ void main() {
     await tester.tap(find.text('Global').last);
     await tester.pumpAndSettle();
     expect(container.read(wifiModeSettingProvider).fallback, Mode.global);
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.byType(CommonSwitch));
     await tester.pumpAndSettle();
     expect(container.read(wifiModeSettingProvider).enabled, isFalse);
   });

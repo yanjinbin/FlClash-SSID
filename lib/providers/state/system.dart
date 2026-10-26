@@ -58,6 +58,7 @@ TrayState trayState(Ref ref) {
         autoLaunch: state.autoLaunch,
         showTrayTitle: state.showTrayTitle,
         hideMenuBarIcon: state.hideMenuBarIcon,
+        monochromeTrayIcon: state.monochromeTrayIcon,
       ),
     ),
   );
@@ -79,6 +80,7 @@ TrayState trayState(Ref ref) {
     selectedMap: selectedMap,
     showTrayTitle: appSetting.showTrayTitle,
     hideMenuBarIcon: appSetting.hideMenuBarIcon,
+    monochromeTrayIcon: appSetting.monochromeTrayIcon,
     safeMode: safeMode,
     hotKeys: hotKeys,
   );
@@ -106,7 +108,7 @@ Map<String, Map<String, int>> trayDelays(Ref ref) {
   final allGroups = ref.watch(groupsProvider);
   final selectedMap = ref.watch(selectedMapProvider);
   final defaultTestUrl = ref.watch(
-    appSettingProvider.select((state) => state.testUrl),
+    patchClashConfigProvider.select((state) => state.testUrl),
   );
   final delays = <String, Map<String, int>>{};
   for (final group in groups) {
@@ -186,7 +188,6 @@ SharedState sharedState(Ref ref) {
       (state) => (
         onlyStatisticsProxy: state.onlyStatisticsProxy,
         showStopAction: state.showNotificationStopAction,
-        testUrl: state.testUrl,
         checkCertificate: state.checkCertificate,
       ),
     ),
@@ -194,7 +195,9 @@ SharedState sharedState(Ref ref) {
   final currentProfileName = currentProfile.label;
   final selectedMap = currentProfile.selectedMap;
   final onlyStatisticsProxy = appSetting.onlyStatisticsProxy;
-  final testUrl = appSetting.testUrl;
+  final testUrl = ref.watch(
+    patchClashConfigProvider.select((state) => state.testUrl),
+  );
   return SharedState(
     currentProfileName: currentProfileName,
     onlyStatisticsProxy: onlyStatisticsProxy,

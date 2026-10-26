@@ -17,6 +17,10 @@ import 'widget_registry.dart';
 import 'widgets/core_status_button.dart';
 import 'widgets/widgets.dart';
 
+// Narrower columns leave a pair of service cells too tight for a status, so
+// the grid stacks them in one.
+const _servicePairColumnMin = 290.0;
+
 const _maxColumnWidth = 440.0;
 
 class DashboardView extends ConsumerStatefulWidget {
@@ -52,7 +56,6 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
       title: editing
           ? appLocalizations.editDashboard
           : appLocalizations.dashboard,
-      backAction: editing ? () => _setEditing(false) : null,
       actions: [if (!editing && coreLib == null) const CoreStatusButton()],
       confirmationAction: editing
           ? IconButtonData(
@@ -118,7 +121,7 @@ class _DesktopDashboard extends ConsumerWidget {
     final scale = DashboardDensityScope.scaleOf(context);
     final base = EdgeInsetsDirectional.fromSTEB(
       16,
-      MediaQuery.paddingOf(context).top,
+      context.contentTopPadding,
       24,
       24 + MediaQuery.paddingOf(context).bottom,
     );
@@ -218,7 +221,9 @@ class _DesktopDashboard extends ConsumerWidget {
           (
             DashboardWidget.serviceStatus,
             shown.contains(DashboardWidget.memoryInfo) ? 1 : 2,
-            const ServiceStatusCard(),
+            ServiceStatusCard(
+              columns: column >= _servicePairColumnMin * scale ? 2 : 1,
+            ),
           ),
           (DashboardWidget.memoryInfo, 1, const MemoryInfo()),
         ];
@@ -301,8 +306,8 @@ class _MobileDashboard extends ConsumerWidget {
     final saved = ref.watch(
       dashboardStateProvider.select((state) => state.dashboardWidgets),
     );
-    final top = MediaQuery.paddingOf(context).top + 4;
-    final bottom = 16 + BottomInsetScope.of(context);
+    final top = context.contentTopPadding;
+    final bottom = 16 + context.bottomInset;
     return CustomScrollView(
       // A viewport per card lays them all out and holds the scroll end still.
       scrollCacheExtent: editing
