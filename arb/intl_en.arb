@@ -963,7 +963,7 @@
   "wifiModeFallback": "Default outbound mode",
   "currentSsid": "Current Wi-Fi SSID",
   "ssidUnavailable": "Unavailable or not connected to Wi-Fi",
-  "wifiModeDesc": "Match the SSID exactly and switch the outbound mode while FlClash is running. Other networks or an unavailable SSID use the default mode. Settings are stored locally and do not use subscription YAML. SSID exclusions are inactive while this is enabled. Manual mode changes last until the network or these settings change.",
+  "wifiModeDesc": "Match the SSID exactly and switch the outbound mode while FlClash is running. Other networks or an unavailable SSID use the default mode. Settings are stored locally and do not use subscription YAML. SSID exclusions are inactive while this is enabled. Manual mode changes are reset to the SSID rule or default mode at the next check. Turn this feature off to keep a manual mode.",
   "ssidTooLong": "An SSID must not exceed 32 UTF-8 bytes.",
   "clearDnsCache": "Clear DNS cache",
   "dnsCacheCleared": "DNS cache cleared",

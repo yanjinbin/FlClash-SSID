@@ -2056,7 +2056,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "whitelistMode": MessageLookupByLibrary.simpleMessage("Modo lista blanca"),
     "wifiMode": MessageLookupByLibrary.simpleMessage("Modo según Wi-Fi"),
     "wifiModeDesc": MessageLookupByLibrary.simpleMessage(
-      "Mientras FlClash está en ejecución, cambia el modo si el SSID coincide exactamente. Otras redes o un SSID no disponible usan el modo predeterminado. Los ajustes son locales y no usan YAML de suscripción. Las exclusiones de SSID no se aplican mientras esta función está activa. El modo manual se mantiene hasta que cambie la red o estos ajustes.",
+      "Mientras FlClash está en ejecución, cambia el modo si el SSID coincide exactamente. Otras redes o un SSID no disponible usan el modo predeterminado. Los ajustes son locales y no usan YAML de suscripción. Las exclusiones de SSID no se aplican mientras esta función está activa. En la siguiente comprobación, el modo manual se sustituye por el de la regla SSID o el modo predeterminado. Desactiva esta función para mantener un modo manual.",
     ),
     "wifiModeFallback": MessageLookupByLibrary.simpleMessage(
       "Modo de salida predeterminado",

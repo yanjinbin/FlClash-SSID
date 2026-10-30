@@ -1903,7 +1903,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "whitelistMode": MessageLookupByLibrary.simpleMessage("Whitelist mode"),
     "wifiMode": MessageLookupByLibrary.simpleMessage("Wi-Fi mode switching"),
     "wifiModeDesc": MessageLookupByLibrary.simpleMessage(
-      "Match the SSID exactly and switch the outbound mode while FlClash is running. Other networks or an unavailable SSID use the default mode. Settings are stored locally and do not use subscription YAML. SSID exclusions are inactive while this is enabled. Manual mode changes last until the network or these settings change.",
+      "Match the SSID exactly and switch the outbound mode while FlClash is running. Other networks or an unavailable SSID use the default mode. Settings are stored locally and do not use subscription YAML. SSID exclusions are inactive while this is enabled. Manual mode changes are reset to the SSID rule or default mode at the next check. Turn this feature off to keep a manual mode.",
     ),
     "wifiModeFallback": MessageLookupByLibrary.simpleMessage(
       "Default outbound mode",

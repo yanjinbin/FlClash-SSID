@@ -50,7 +50,7 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
 
   int _ssidRequestId = 0;
   int _connectivityRequestId = 0;
-  bool _onWifi = false;
+  bool _wifiPossible = false;
   Timer? _ssidTimer;
   Timer? _activityTimer;
   bool _recentActivity = false;
@@ -124,24 +124,45 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
   /// The platform says the Wi-Fi moved before the new SSID is readable, so the
   /// fallback applies first; the mapped mode follows in `_publishSsid`.
   void _handleSsidChange() {
+    _connectivityRequestId++;
+    _wifiPossible = true;
+    _markSsidActivity();
+    _applyTransitionFallback();
+    unawaited(_updateSsid());
+  }
+
+  void _applyTransitionFallback() {
     final settings = ref.read(wifiModeSettingProvider);
     if (settings.enabled && !ref.read(safeModeProvider)) {
       _transitionPending = true;
+      // The fallback replaces the rule until the read finishes, so the last
+      // decision no longer describes what the Core runs.
+      _lastModeDecision = null;
       if (ref.read(patchClashConfigProvider).mode != settings.fallback) {
         ref
             .read(setupActionProvider.notifier)
             .changeMode(settings.fallback, immediate: true);
       }
     }
-    unawaited(_updateSsid());
   }
 
   void _handleResults(List<ConnectivityResult> results) {
     _connectivityRequestId++;
-    _onWifi = results.contains(ConnectivityResult.wifi);
+    _wifiPossible = _isWifiPossible(results);
     _markSsidActivity();
+    if (_wifiPossible) {
+      _applyTransitionFallback();
+    }
     unawaited(_updateSsid());
     widget.onConnectivityChanged?.call(results);
+  }
+
+  /// A VPN hides the physical transport: Android reports `vpn` and macOS
+  /// reports `other`, so the SSID read itself has to tell Wi-Fi from the rest.
+  static bool _isWifiPossible(List<ConnectivityResult> results) {
+    return results.contains(ConnectivityResult.wifi) ||
+        results.contains(ConnectivityResult.vpn) ||
+        results.contains(ConnectivityResult.other);
   }
 
   void _markSsidActivity() {
@@ -179,17 +200,14 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
     final requestId = ++_ssidRequestId;
     _ssidTimer?.cancel();
     // The SSID costs a blocking platform call and a location permission on
-    // Android, macOS and Windows, and nothing reads it until a network is
-    // excluded.
+    // Android, macOS and Windows, and nothing reads it until SSID automation
+    // or an excluded network asks for it.
 
-    if (!_onWifi ||
-        ref.read(safeModeProvider) ||
-        (ref.read(excludeSSIDsProvider).isEmpty &&
-            !ref.read(wifiModeSettingProvider).enabled)) {
-      _publishSsid(requestId, null);
-      return;
-    }
     try {
+      if (!_wifiPossible || ref.read(safeModeProvider) || !_ssidGateOpen) {
+        _publishSsid(requestId, null);
+        return;
+      }
       final ssid = await _readSsid().timeout(const Duration(seconds: 4));
       final changed = mounted && ref.read(currentSSIDProvider) != ssid;
       if (_publishSsid(requestId, ssid) && changed) {
@@ -205,6 +223,7 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
     } finally {
       if (mounted &&
           requestId == _ssidRequestId &&
+          !ref.read(safeModeProvider) &&
           ref.read(wifiModeSettingProvider).enabled) {
         _ssidTimer = Timer(
           _recentActivity ? _activePollInterval : _idlePollInterval,
@@ -223,7 +242,8 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
     if (settings.enabled && !ref.read(safeModeProvider)) {
       final mode = settings.rules[ssid] ?? settings.fallback;
       final decision = (ssid, mode);
-      if (_lastModeDecision != decision) {
+      if (_lastModeDecision != decision ||
+          ref.read(patchClashConfigProvider).mode != mode) {
         final transition = _transitionPending || _lastModeDecision?.$1 != ssid;
         _transitionPending = false;
         _lastModeDecision = decision;

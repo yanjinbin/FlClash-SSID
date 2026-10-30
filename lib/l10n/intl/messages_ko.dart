@@ -1615,7 +1615,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "whitelistMode": MessageLookupByLibrary.simpleMessage("화이트리스트 모드"),
     "wifiMode": MessageLookupByLibrary.simpleMessage("Wi-Fi별 모드 전환"),
     "wifiModeDesc": MessageLookupByLibrary.simpleMessage(
-      "FlClash 실행 중 SSID가 정확히 일치하면 모드를 전환합니다. 다른 네트워크나 읽을 수 없는 SSID에는 기본 모드를 사용합니다. 설정은 로컬에 저장되며 구독 YAML을 사용하지 않습니다. 활성화 중에는 SSID 제외가 적용되지 않습니다. 수동 모드는 네트워크나 이 설정이 변경될 때까지 유지됩니다.",
+      "FlClash 실행 중 SSID가 정확히 일치하면 모드를 전환합니다. 다른 네트워크나 읽을 수 없는 SSID에는 기본 모드를 사용합니다. 설정은 로컬에 저장되며 구독 YAML을 사용하지 않습니다. 활성화 중에는 SSID 제외가 적용되지 않습니다. 수동으로 모드를 변경해도 다음 확인 시 SSID 규칙의 모드 또는 기본 모드로 돌아갑니다. 수동 모드를 유지하려면 이 기능을 끄세요.",
     ),
     "wifiModeFallback": MessageLookupByLibrary.simpleMessage("기본 아웃바운드 모드"),
     "wifiModeRules": MessageLookupByLibrary.simpleMessage("SSID 모드 규칙"),

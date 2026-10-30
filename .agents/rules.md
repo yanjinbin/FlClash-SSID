@@ -334,12 +334,16 @@ leaving a repo-wide policy as a comment reaches only the reader of that one file
   have landed. Any test that mocks the `tray` channel must return `true` from `show`.
 - Reading the Wi-Fi SSID is opt-in work, not ambient state. `ConnectivityManager` reads it only while `excludeSSIDs` is
   non-empty or `wifiModeSettings.enabled` is true. The read costs a platform call plus a location permission on Android
-  and macOS. Mode automation follows the plugin's SSID change stream and polls while on Wi-Fi — once a second for 30
-  seconds after a change, then every five seconds — because a connectivity-type event does not fire when the access
-  point changes. It takes precedence over SSID suspension. An automated mode switch patches the Core without waiting
-  for the config debounce and then closes live connections, since a flow keeps the mode it was matched under. A
-  detected association change applies the fallback before the new SSID is read, so a slow read cannot hold the old
-  mode. A second consumer must widen that gate, not drop it.
+  and macOS. Mode automation follows the plugin's SSID change stream and polls while Wi-Fi may be up — once a second
+  for 30 seconds after a change, then every five seconds — because a connectivity-type event does not fire when the
+  access point changes. A VPN hides the transport (`vpn` on Android, `other` on macOS), so both count as possibly
+  Wi-Fi and the SSID read decides. It takes precedence over SSID suspension. An automated mode switch patches the
+  Core without waiting for the config debounce and then closes live connections, since a flow keeps the mode it was
+  matched under. A detected association change applies the fallback before the new SSID is read, so a slow read
+  cannot hold the old mode, and forgets the previous decision so an unchanged SSID still gets its rule back. A second
+  consumer must widen that gate, not drop it.
+  While automation is enabled, each poll also corrects manual mode changes. Polling continues without Wi-Fi to
+  enforce the fallback, but does not read the SSID until Wi-Fi is possible. Disable automation to keep a manual mode.
 - On Android the `wifi_ssid` permission is only `granted` once `ACCESS_BACKGROUND_LOCATION` is held too (Q+). Fine
   location alone reads the SSID in the foreground but returns `UNKNOWN_SSID` once the app is backgrounded, which is
   where on-demand spends most of its time. `getSsid` itself only needs fine location, so the split stays inside the

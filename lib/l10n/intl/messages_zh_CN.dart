@@ -1491,7 +1491,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "whitelistMode": MessageLookupByLibrary.simpleMessage("白名单模式"),
     "wifiMode": MessageLookupByLibrary.simpleMessage("按 Wi-Fi 切换模式"),
     "wifiModeDesc": MessageLookupByLibrary.simpleMessage(
-      "FlClash 运行时，根据 SSID 精确匹配并切换出站模式；其他网络或无法读取 SSID 时使用默认模式。设置保存在本地，不依赖订阅 YAML。启用后，排除 SSID 功能暂停生效。手动切换模式会保持到网络或此处设置发生变化。",
+      "FlClash 运行时，根据 SSID 精确匹配并切换出站模式；其他网络或无法读取 SSID 时使用默认模式。设置保存在本地，不依赖订阅 YAML。启用后，排除 SSID 功能暂停生效。手动切换模式后，下次检查会恢复为 SSID 规则指定的模式或默认模式；如需保持手动模式，请关闭此功能。",
     ),
     "wifiModeFallback": MessageLookupByLibrary.simpleMessage("默认出站模式"),
     "wifiModeRules": MessageLookupByLibrary.simpleMessage("SSID 模式规则"),

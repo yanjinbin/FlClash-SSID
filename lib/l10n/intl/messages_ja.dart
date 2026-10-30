@@ -1640,7 +1640,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "whitelistMode": MessageLookupByLibrary.simpleMessage("ホワイトリストモード"),
     "wifiMode": MessageLookupByLibrary.simpleMessage("Wi-Fi によるモード切替"),
     "wifiModeDesc": MessageLookupByLibrary.simpleMessage(
-      "FlClash の実行中、SSID の完全一致で送信モードを切り替えます。他のネットワークや SSID を取得できない場合は既定のモードを使います。設定はローカルに保存され、購読 YAML は使いません。有効時は SSID 除外を適用しません。手動変更はネットワークまたはこの設定が変わるまで保持されます。",
+      "FlClash の実行中、SSID の完全一致で送信モードを切り替えます。他のネットワークや SSID を取得できない場合は既定のモードを使います。設定はローカルに保存され、購読 YAML は使いません。有効時は SSID 除外を適用しません。手動で変更しても、次の確認時に SSID ルールのモードまたは既定のモードに戻ります。手動のモードを維持するには、この機能を無効にしてください。",
     ),
     "wifiModeFallback": MessageLookupByLibrary.simpleMessage("既定の送信モード"),
     "wifiModeRules": MessageLookupByLibrary.simpleMessage("SSID モードルール"),
