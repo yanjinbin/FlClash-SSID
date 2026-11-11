@@ -7,7 +7,7 @@ import 'package:fl_clash/features/form/form.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/widgets.dart';
 
 class WifiModeSection extends ConsumerWidget {
   const WifiModeSection({super.key});
@@ -102,7 +102,7 @@ class _WifiModeRulesView extends ConsumerWidget {
             onPressed: editing
                 ? toggle
                 : () => editWifiModeRule(context, ref, entry),
-            trailing: CommonCheckBox(
+            trailing: Checkbox(
               value: selected,
               isCircle: true,
               onChanged: (_) => toggle(),

@@ -6,8 +6,9 @@ import 'package:fl_clash/ui/ui.dart';
 import 'package:fl_clash/views/dashboard/widgets/wifi_mode.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/widgets.dart';
 
+import '../../helpers/host_scaffold.dart';
 import '../../helpers/test_app.dart';
 
 void main() {
@@ -32,7 +33,9 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: const TestApp(
-          child: Scaffold(body: SingleChildScrollView(child: WifiModeCard())),
+          child: HostScaffold(
+            body: SingleChildScrollView(child: WifiModeCard()),
+          ),
         ),
       ),
     );
@@ -77,7 +80,7 @@ void main() {
     tester,
   ) async {
     await pumpCard(tester);
-    await tester.tap(find.byType(CommonSwitch));
+    await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(container.read(wifiModeSettingProvider).enabled, isTrue);
 
@@ -86,7 +89,7 @@ void main() {
     await tester.tap(find.text('Global').last);
     await tester.pumpAndSettle();
     expect(container.read(wifiModeSettingProvider).fallback, Mode.global);
-    await tester.tap(find.byType(CommonSwitch));
+    await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(container.read(wifiModeSettingProvider).enabled, isFalse);
   });

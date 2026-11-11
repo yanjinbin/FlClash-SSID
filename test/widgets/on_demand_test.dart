@@ -1,18 +1,18 @@
 import 'dart:async';
 
+import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/providers/app.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/config.dart';
 import 'package:fl_clash/providers/on_demand.dart';
 import 'package:fl_clash/providers/state.dart';
-import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/state.dart';
 import 'package:fl_clash/ui/icons/icons.dart';
 import 'package:fl_clash/views/config/on_demand.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/services.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wifi_ssid/wifi_ssid.dart';
@@ -130,7 +130,7 @@ void main() {
     await pumpView(tester, ssids: ['Home', 'Office']);
     expect(find.byGlyph(AppGlyphs.delete), findsNothing);
 
-    await tester.tap(find.byType(CommonCheckBox).first);
+    await tester.tap(find.byType(Checkbox).first);
     await tester.pumpAndSettle();
 
     expect(find.byGlyph(AppGlyphs.delete), findsOneWidget);
@@ -142,7 +142,7 @@ void main() {
     tester,
   ) async {
     await pumpView(tester, ssids: ['Home', 'Office']);
-    await tester.tap(find.byType(CommonCheckBox).first);
+    await tester.tap(find.byType(Checkbox).first);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Select all'));
@@ -162,7 +162,7 @@ void main() {
     tester,
   ) async {
     await pumpView(tester, ssids: ['Home', 'Office']);
-    await tester.tap(find.byType(CommonCheckBox).first);
+    await tester.tap(find.byType(Checkbox).first);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byGlyph(AppGlyphs.delete));
