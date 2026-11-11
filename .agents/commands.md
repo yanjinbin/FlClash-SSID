@@ -342,8 +342,10 @@ gh workflow run build.yaml --ref feature/wifi-ssid-mode \
 An empty `release_tag` builds Actions artifacts only. A non-empty tag publishes a fork pre-release after the
 selected release builds and required checks pass, with SHA-256 checksums and the exact source commit. Reusing a
 release tag is allowed only for the same commit. `include_macos_arm64=false` leaves out that package; it does not
-reuse or upload a local build. Release dispatches skip redundant desktop debug builds. The upstream publishing
-job stays separate, including its external distribution integrations.
+reuse or upload a local build. Fork releases build Android, macOS and Windows only; pass `-f include_linux=true`
+to add the Linux packages, while upstream keeps building them by default. Release dispatches skip redundant
+desktop debug builds. The upstream publishing job stays separate, including its external distribution
+integrations.
 
 ## Verify
 

@@ -16,6 +16,10 @@ on:
         description: 'Build macOS ARM64 as well'
         type: boolean
         default: true
+      include_linux:
+        description: 'Build Linux as well; fork releases default to Android, macOS and Windows'
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -343,6 +347,8 @@ jobs:
         id: matrix
         env:
           INCLUDE_MACOS_ARM64: ${{ github.event_name != 'workflow_dispatch' || inputs.include_macos_arm64 }}
+          INCLUDE_LINUX: ${{ inputs.include_linux }}
+          IS_FORK: ${{ github.repository != 'chen08209/FlClash' }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           python3 - <<'PYTHON'
@@ -364,6 +370,8 @@ jobs:
           ]
           if os.environ['INCLUDE_MACOS_ARM64'] != 'true':
               builds = [b for b in builds if (b['platform'], b.get('arch')) != ('macos', 'arm64')]
+          if os.environ['IS_FORK'] == 'true' and os.environ['INCLUDE_LINUX'] != 'true':
+              builds = [b for b in builds if b['platform'] != 'linux']
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write('matrix=' + json.dumps({'include': builds}) + '\n')
           PYTHON
