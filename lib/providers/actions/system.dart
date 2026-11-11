@@ -111,7 +111,11 @@ class SystemAction extends _$SystemAction {
   }
 
   Future<void> handleClose([bool exit = true]) async {
-    if (ref.read(appSettingProvider).minimizeOnExit || !exit) {
+    if (hidesWindowOnClose(
+      isMacOS: system.isMacOS,
+      minimizeOnExit: ref.read(appSettingProvider).minimizeOnExit,
+      exit: exit,
+    )) {
       if (system.isDesktop) {
         await _savePreferencesSafely();
       }
@@ -171,3 +175,12 @@ class SystemAction extends _$SystemAction {
     ref.read(localIpProvider.notifier).value = await getLocalIpAddress();
   }
 }
+
+/// Closing a macOS window never quits: the app keeps living in the menu bar,
+/// and only the tray's Exit or Cmd+Q ends it.
+@visibleForTesting
+bool hidesWindowOnClose({
+  required bool isMacOS,
+  required bool minimizeOnExit,
+  required bool exit,
+}) => isMacOS || minimizeOnExit || !exit;

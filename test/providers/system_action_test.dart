@@ -253,6 +253,38 @@ void main() {
     });
   });
 
+  group('window close', () {
+    test('hides on macOS whatever minimize on exit says', () {
+      expect(
+        hidesWindowOnClose(isMacOS: true, minimizeOnExit: false, exit: true),
+        isTrue,
+      );
+      expect(
+        hidesWindowOnClose(isMacOS: true, minimizeOnExit: true, exit: true),
+        isTrue,
+      );
+      expect(
+        hidesWindowOnClose(isMacOS: true, minimizeOnExit: true, exit: false),
+        isTrue,
+      );
+    });
+
+    test('follows minimize on exit on other platforms', () {
+      expect(
+        hidesWindowOnClose(isMacOS: false, minimizeOnExit: true, exit: true),
+        isTrue,
+      );
+      expect(
+        hidesWindowOnClose(isMacOS: false, minimizeOnExit: false, exit: false),
+        isTrue,
+      );
+      expect(
+        hidesWindowOnClose(isMacOS: false, minimizeOnExit: false, exit: true),
+        isFalse,
+      );
+    });
+  });
+
   test(
     'saving preferences captures the latest normal window geometry',
     () async {

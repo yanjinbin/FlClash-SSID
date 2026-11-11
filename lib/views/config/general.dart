@@ -264,11 +264,12 @@ class GeneralView extends ConsumerWidget {
         title: Text(appLocalizations.onDemand),
         widget: const OnDemandView(),
       ),
-      _appSettingToggle(
-        title: (l) => l.minimizeOnExit,
-        select: (state) => state.minimizeOnExit,
-        update: (state, value) => state.copyWith(minimizeOnExit: value),
-      ),
+      if (!system.isMacOS)
+        _appSettingToggle(
+          title: (l) => l.minimizeOnExit,
+          select: (state) => state.minimizeOnExit,
+          update: (state, value) => state.copyWith(minimizeOnExit: value),
+        ),
       if (system.isMacOS)
         _appSettingToggle(
           title: (l) => l.hideMenuBarIcon,
