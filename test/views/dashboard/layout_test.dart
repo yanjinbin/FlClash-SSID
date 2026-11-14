@@ -99,6 +99,16 @@ void main() {
     'the desktop fills the window with inline Wi-Fi rules, the controls '
     'under the exit',
     (tester) async {
+      container
+          .read(appSettingProvider.notifier)
+          .update(
+            (state) => state.copyWith(
+              dashboardWidgets: [
+                for (final card in state.dashboardWidgets)
+                  if (card != DashboardWidget.memoryInfo) card,
+              ],
+            ),
+          );
       await pumpDashboard(tester, const Size(1220, 1100));
 
       final current = rectOf(tester, CurrentOutboundCard);
@@ -206,10 +216,10 @@ void main() {
         .read(appSettingProvider.notifier)
         .update(
           (state) => state.copyWith(
-            dashboardWidgets: [
+            dashboardWidgets: {
               ...state.dashboardWidgets,
               DashboardWidget.memoryInfo,
-            ],
+            }.toList(),
           ),
         );
     await pumpDashboard(tester, const Size(1440, 900));
@@ -324,10 +334,10 @@ void main() {
         .read(appSettingProvider.notifier)
         .update(
           (state) => state.copyWith(
-            dashboardWidgets: [
+            dashboardWidgets: {
               ...state.dashboardWidgets,
               DashboardWidget.memoryInfo,
-            ],
+            }.toList(),
           ),
         );
     await pumpDashboard(tester, const Size(2560, 1440));
@@ -403,10 +413,10 @@ void main() {
         .read(appSettingProvider.notifier)
         .update(
           (state) => state.copyWith(
-            dashboardWidgets: [
+            dashboardWidgets: {
               ...state.dashboardWidgets,
               DashboardWidget.memoryInfo,
-            ],
+            }.toList(),
           ),
         );
     await pumpDashboard(tester, const Size(800, 900));

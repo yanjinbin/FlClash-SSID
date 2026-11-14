@@ -1150,6 +1150,14 @@ void main() {
       expect(props.hideIp, true);
     });
 
+    test('shows every dashboard card by default', () {
+      expect(defaultDashboardWidgets, unorderedEquals(DashboardWidget.values));
+      expect(
+        Config.realFromJson(null).appSettingProps.dashboardWidgets,
+        defaultDashboardWidgets,
+      );
+    });
+
     test('restores the default dashboard when it knows none of the cards', () {
       final props = AppSettingProps.safeFromJson({
         'dashboardWidgets': ['futureCard', 'otherFutureCard'],
