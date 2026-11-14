@@ -9,16 +9,8 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:wifi_ssid/wifi_ssid.dart';
 
 import 'app.dart';
-import 'config.dart';
 
 part 'generated/on_demand.g.dart';
-
-@riverpod
-bool ssidRequired(Ref ref) {
-  final excluded = ref.watch(excludeSSIDsProvider).isNotEmpty;
-  final automaticMode = ref.watch(wifiModeSettingProvider).enabled;
-  return excluded || automaticMode;
-}
 
 @Riverpod(keepAlive: true)
 class LocationPermissions extends _$LocationPermissions {
@@ -47,10 +39,6 @@ class LocationPermissions extends _$LocationPermissions {
     if (permission == WifiSsidPermission.granted ||
         state != WifiSsidPermission.permanentlyDenied) {
       state = permission;
-    }
-    if (!ref.read(ssidRequiredProvider)) {
-      _autoRequested = false;
-      return;
     }
     if (permission != WifiSsidPermission.denied || _autoRequested) {
       return;

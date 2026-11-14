@@ -103,14 +103,14 @@ void main() {
       );
     });
 
-    test('nothing is asked while no network is excluded', () async {
+    test('asks for the permission without any SSID setting', () async {
       container.dispose();
       container = excluding(const []);
       answer((_) async => 1);
 
       await notifier().refresh();
 
-      expect(calls, ['checkPermission']);
+      expect(calls, ['checkPermission', 'requestPermission']);
     });
 
     test('auto-requests at most once per session while denied', () async {
@@ -120,23 +120,6 @@ void main() {
       await notifier().refresh();
 
       expect(calls.where((call) => call == 'requestPermission').length, 1);
-    });
-
-    test('an empty excluded list re-arms the auto-request', () async {
-      container.dispose();
-      container = ProviderContainer();
-      answer((_) async => 1);
-
-      await notifier().refresh();
-      container.read(excludeSSIDsProvider.notifier).value = const ['Office'];
-      await notifier().refresh();
-      await notifier().refresh();
-      container.read(excludeSSIDsProvider.notifier).value = const [];
-      await notifier().refresh();
-      container.read(excludeSSIDsProvider.notifier).value = const ['Office'];
-      await notifier().refresh();
-
-      expect(calls.where((call) => call == 'requestPermission').length, 2);
     });
 
     test('a failed auto-request is retried on the next refresh', () async {
