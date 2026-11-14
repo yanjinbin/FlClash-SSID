@@ -306,6 +306,29 @@ void main() {
         expect(await upgrade(4), isTrue);
       });
 
+      test('shows every dashboard card again, once', () async {
+        Future<List<DashboardWidget>> upgrade(int from) async {
+          final configMap = _createConfigMap();
+          configMap['appSettingProps'] = {
+            'dashboardWidgets': ['currentOutbound', 'profiles'],
+          };
+          final store = _FakeMigrationStore(
+            configMap: configMap,
+            version: Migration.currentVersion,
+            upgradeVersion: from,
+          );
+          return (await Migration(
+            store: store,
+          ).run()).appSettingProps.dashboardWidgets;
+        }
+
+        expect(await upgrade(4), defaultDashboardWidgets);
+        expect(await upgrade(5), [
+          DashboardWidget.currentOutbound,
+          DashboardWidget.profiles,
+        ]);
+      });
+
       test('a new install only records it', () async {
         final store = _FakeMigrationStore(
           configMap: null,
