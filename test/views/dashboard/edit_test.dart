@@ -6,7 +6,6 @@ import 'package:fl_clash/views/dashboard/edit.dart';
 import 'package:fl_clash/views/dashboard/widgets/widgets.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,7 +113,7 @@ void main() {
     expect(find.byTooltip('Add Memory info'), findsOneWidget);
     expect(find.byType(SortHandle), findsNothing);
     // The desktop-only card has no row on a phone.
-    expect(find.byTooltip('Add System proxy'), findsNothing);
+    expect(find.byTooltip('Add Traffic takeover'), findsNothing);
     expect(tester.takeException(), isNull);
 
     await teardown(tester);
@@ -195,7 +194,7 @@ void main() {
   ) async {
     seed(const [
       DashboardWidget.currentOutbound,
-      DashboardWidget.systemProxy,
+      DashboardWidget.networkTakeover,
       DashboardWidget.networkSpeed,
       DashboardWidget.profiles,
     ]);
@@ -206,7 +205,7 @@ void main() {
 
     expect(saved(), const [
       DashboardWidget.currentOutbound,
-      DashboardWidget.systemProxy,
+      DashboardWidget.networkTakeover,
       DashboardWidget.profiles,
     ]);
 
@@ -280,64 +279,6 @@ void main() {
     expect(tester.state(find.byType(MemoryInfo)), same(memory));
     expect(tester.takeException(), isNull);
 
-    await teardown(tester);
-  });
-
-  testWidgets('drag preview leaves the semantics tree until drop', (
-    tester,
-  ) async {
-    final semantics = tester.ensureSemantics();
-    seed(const [
-      DashboardWidget.currentOutbound,
-      DashboardWidget.networkSpeed,
-      DashboardWidget.wifiMode,
-    ]);
-    await pumpEditor(
-      tester,
-      platform: SupportPlatform.MacOS,
-      size: const Size(620, 1400),
-    );
-    final card = find.byType(WifiModeCard);
-    final nodeId = tester.getSemantics(card).id;
-    Set<int> semanticIds() {
-      final ids = <int>{};
-      void visit(SemanticsNode node) {
-        ids.add(node.id);
-        node.visitChildren((child) {
-          visit(child);
-          return true;
-        });
-      }
-
-      visit(
-        tester
-            .binding
-            .renderViews
-            .single
-            .owner!
-            .semanticsOwner!
-            .rootSemanticsNode!,
-      );
-      return ids;
-    }
-
-    expect(semanticIds(), contains(nodeId));
-    final gesture = await tester.startGesture(
-      tester.getCenter(card),
-      kind: PointerDeviceKind.mouse,
-    );
-    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 100));
-    await gesture.moveBy(const Offset(0, -40));
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(find.byType(WifiModeCard), findsOneWidget);
-    expect(semanticIds(), isNot(contains(nodeId)));
-    await gesture.moveTo(tester.getCenter(find.byType(NetworkSpeedCard)));
-    await tester.pump(const Duration(milliseconds: 100));
-    await gesture.up();
-    await settle(tester);
-    expect(semanticIds(), contains(tester.getSemantics(card).id));
-    expect(saved().indexOf(DashboardWidget.wifiMode), 1);
-    semantics.dispose();
     await teardown(tester);
   });
 
@@ -440,7 +381,7 @@ void main() {
       'held and dragged with a mouse too', (tester) async {
     seed(const [
       DashboardWidget.currentOutbound,
-      DashboardWidget.systemProxy,
+      DashboardWidget.networkTakeover,
       DashboardWidget.profiles,
     ]);
     await pumpEditor(
@@ -473,32 +414,34 @@ void main() {
     expect(saved(), const [
       DashboardWidget.currentOutbound,
       DashboardWidget.profiles,
-      DashboardWidget.systemProxy,
+      DashboardWidget.networkTakeover,
     ]);
 
-    await tester.tap(find.byTooltip('Remove System proxy'));
+    await tester.tap(find.byTooltip('Remove Traffic takeover'));
     await settle(tester);
 
-    expect(saved(), isNot(contains(DashboardWidget.systemProxy)));
-    expect(find.byTooltip('Add System proxy'), findsOneWidget);
+    expect(saved(), isNot(contains(DashboardWidget.networkTakeover)));
+    expect(find.byTooltip('Add Traffic takeover'), findsOneWidget);
 
     await teardown(tester);
   });
 
-  testWidgets('a landscape phone can edit the same saved cards', (
+  testWidgets('a landscape phone gets the fixed grid without an edit mode', (
     tester,
   ) async {
     seed(const [DashboardWidget.currentOutbound, DashboardWidget.profiles]);
     await pumpDashboard(tester, size: const Size(915, 412));
 
-    expect(find.byTooltip('Edit dashboard'), findsOneWidget);
+    expect(find.byTooltip('Edit dashboard'), findsNothing);
     expect(find.byType(DashboardEditor), findsNothing);
-    expect(find.byType(OutboundModeBar), findsNothing);
+    expect(find.byType(OutboundModeBar), findsOneWidget);
 
     await teardown(tester);
   });
 
-  testWidgets('resizing preserves editing and the saved cards', (tester) async {
+  testWidgets('turning to the fixed grid ends editing for good', (
+    tester,
+  ) async {
     seed(const [DashboardWidget.currentOutbound, DashboardWidget.profiles]);
     await pumpEditor(tester);
     expect(find.byType(DashboardEditor), findsOneWidget);
@@ -510,68 +453,26 @@ void main() {
     }
 
     await resize(const Size(915, 412));
-    expect(find.byType(DashboardEditor), findsOneWidget);
+    expect(find.byType(DashboardEditor), findsNothing);
     await resize(const Size(412, 1400));
-    expect(find.byType(DashboardEditor), findsOneWidget);
-    expect(saved(), [
-      DashboardWidget.currentOutbound,
-      DashboardWidget.profiles,
-    ]);
+    expect(find.byType(DashboardEditor), findsNothing);
+    expect(find.byTooltip('Edit dashboard'), findsOneWidget);
 
     await teardown(tester);
   });
 
-  for (final width in [800.0, 1440.0]) {
-    testWidgets('the $width desktop can hide and add cards across widths', (
+  testWidgets('the desktop grid keeps its fixed layout without an edit mode', (
+    tester,
+  ) async {
+    await pumpDashboard(
       tester,
-    ) async {
-      seed(const [DashboardWidget.currentOutbound, DashboardWidget.memoryInfo]);
-      await pumpDashboard(
-        tester,
-        platform: SupportPlatform.MacOS,
-        size: Size(width, 1000),
-      );
-      expect(find.byType(MemoryInfo), findsOneWidget);
-      expect(find.byType(OutboundModeBar), findsNothing);
-      expect(find.byType(NetworkTakeoverTile), findsNothing);
-      expect(find.byType(WifiModeCard), findsNothing);
-      expect(find.byType(ConnectionsTableCard), findsNothing);
-      expect(find.byType(ProxyGroupsCard), findsNothing);
+      platform: SupportPlatform.MacOS,
+      size: const Size(1220, 900),
+    );
 
-      await edit(tester);
-      await tester.tap(find.byTooltip('Remove Memory info'));
-      await settle(tester);
-      await tester.tap(find.byTooltip('Done'));
-      await settle(tester);
-      expect(saved(), [DashboardWidget.currentOutbound]);
-      expect(find.byType(MemoryInfo), findsNothing);
+    expect(find.byTooltip('Edit dashboard'), findsNothing);
+    expect(find.byType(DashboardEditor), findsNothing);
 
-      tester.view.physicalSize = const Size(620, 1000);
-      container.read(viewSizeProvider.notifier).value = const Size(620, 1000);
-      await settle(tester);
-      expect(find.byType(MemoryInfo), findsNothing);
-      tester.view.physicalSize = Size(width, 1000);
-      container.read(viewSizeProvider.notifier).value = Size(width, 1000);
-      await settle(tester);
-
-      await edit(tester);
-      final add = find.byTooltip('Add Memory info');
-      await tester.scrollUntilVisible(
-        add,
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.tap(add);
-      await settle(tester);
-      await tester.tap(find.byTooltip('Done'));
-      await settle(tester);
-      expect(saved(), [
-        DashboardWidget.currentOutbound,
-        DashboardWidget.memoryInfo,
-      ]);
-      expect(find.byType(MemoryInfo), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await teardown(tester);
-    });
-  }
+    await teardown(tester);
+  });
 }

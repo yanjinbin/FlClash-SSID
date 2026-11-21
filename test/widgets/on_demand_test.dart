@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:fl_clash/common/constant.dart';
 import 'package:fl_clash/l10n/l10n.dart';
+import 'package:fl_clash/plugins/wifi_ssid.dart';
 import 'package:fl_clash/providers/app.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
@@ -15,7 +17,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wifi_ssid/wifi_ssid.dart';
 
 import '../helpers/glyph_finders.dart';
 import '../helpers/test_app.dart';
@@ -55,6 +56,10 @@ class _TestBatteryOptimizationIgnored extends BatteryOptimizationIgnored {
 }
 
 void main() {
+  setUpAll(() {
+    wifiSsidManager.resetForTesting(const AndroidWifiSsidHost());
+  });
+
   late ProviderContainer container;
 
   Future<void> pumpView(
@@ -206,7 +211,7 @@ void main() {
   testWidgets('a refused location request leaves the permission as it was', (
     tester,
   ) async {
-    const channel = MethodChannel('wifi_ssid');
+    const channel = MethodChannel('$packageName/wifi_ssid');
     final messenger = tester.binding.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(
       channel,
@@ -228,7 +233,7 @@ void main() {
   testWidgets('a second tap while the location request waits asks only once', (
     tester,
   ) async {
-    const channel = MethodChannel('wifi_ssid');
+    const channel = MethodChannel('$packageName/wifi_ssid');
     final messenger = tester.binding.defaultBinaryMessenger;
     final answer = Completer<Object?>();
     var requests = 0;
@@ -254,7 +259,7 @@ void main() {
   testWidgets('Windows refused location access offers the settings', (
     tester,
   ) async {
-    const channel = MethodChannel('wifi_ssid');
+    const channel = MethodChannel('$packageName/wifi_ssid');
     final messenger = tester.binding.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(
       channel,

@@ -2,14 +2,13 @@ import 'dart:async';
 
 import 'package:fl_clash/common/constant.dart';
 import 'package:fl_clash/plugins/battery.dart';
-import 'package:fl_clash/models/models.dart';
+import 'package:fl_clash/plugins/wifi_ssid.dart';
 import 'package:fl_clash/providers/app.dart';
 import 'package:fl_clash/providers/config.dart';
 import 'package:fl_clash/providers/on_demand.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod/riverpod.dart';
-import 'package:wifi_ssid/wifi_ssid.dart';
 
 class _AndroidBatteryOptimizationIgnored extends BatteryOptimizationIgnored {
   @override
@@ -17,12 +16,16 @@ class _AndroidBatteryOptimizationIgnored extends BatteryOptimizationIgnored {
 }
 
 void main() {
+  setUpAll(() {
+    wifiSsidManager.resetForTesting(const AndroidWifiSsidHost());
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
   group('location permission', () {
-    const channel = MethodChannel('wifi_ssid');
+    const channel = MethodChannel('$packageName/wifi_ssid');
     late ProviderContainer container;
     late List<String> calls;
 
@@ -70,20 +73,6 @@ void main() {
       );
     });
 
-    test('mode automation requests permission without exclusions', () async {
-      container.dispose();
-      container = ProviderContainer(
-        overrides: [
-          wifiModeSettingProvider.overrideWithValue(
-            const WifiModeSettings(enabled: true),
-          ),
-        ],
-      );
-      answer((call) async => call.method == 'checkPermission' ? 1 : 0);
-      await notifier().refresh();
-      expect(calls, ['checkPermission', 'requestPermission']);
-    });
-
     test('a safe mode build neither checks nor requests location', () async {
       container.dispose();
       container = ProviderContainer(
@@ -103,7 +92,7 @@ void main() {
       );
     });
 
-    test('asks for the permission without any SSID setting', () async {
+    test('asks without an excluded network too', () async {
       container.dispose();
       container = excluding(const []);
       answer((_) async => 1);

@@ -26,10 +26,11 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
 
 env:
-  IS_STABLE: ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+  # Fork builds are always stable; upstream releases drop the suffix from a pre tag.
+  IS_STABLE: ${{ github.repository != 'chen08209/FlClash' || !contains(github.ref_name, '-') }}
   # See CI Caches in .agents/commands.md.
   BRANCH_CACHE: ${{ !startsWith(github.ref, 'refs/tags/') }}
-  FLUTTER_VERSION: '3.47.6'
+  FLUTTER_VERSION: '3.50.0'
   GO_VERSION: '1.27.1'
   NDK_VERSION: r28c
 
@@ -64,14 +65,22 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: ${{ env.BRANCH_CACHE }}
 
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev
+
       - name: Install dependencies
         run: flutter pub get
 
       - name: Check format
-        run: dart format --output=none --set-exit-if-changed lib test tool plugins setup.dart
+        run: dart format --output=none --set-exit-if-changed lib test tool plugins
 
       - name: Analyze
         run: flutter analyze --no-fatal-infos
+
+      - name: Analyze with the rsFeature checks stripped
+        run: bash tool/strip_check.sh
 
       - name: Skip the Go core build hook
         run: |
@@ -162,7 +171,7 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libgtk-3-dev libayatana-appindicator3-dev libsecret-1-dev
+          sudo apt-get install -y ninja-build libgtk-3-dev libsecret-1-dev
 
       - name: Setup Xcode
         if: matrix.platform == 'macos'
@@ -307,6 +316,11 @@ jobs:
             plugins/rust_api/rust
           save-if: ${{ env.BRANCH_CACHE }}
 
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev
+
       - name: Check format
         run: |
           cargo fmt --manifest-path services/helper/Cargo.toml -- --check
@@ -337,8 +351,53 @@ jobs:
       - name: Run Windows service tests
         run: cargo test --manifest-path services/helper/Cargo.toml --features windows-service
 
+  version:
+    name: Version
+    # A v* tag derives its version so Android never sees a lower versionCode; a
+    # fork dispatch or branch build uses the version pubspec was bumped to.
+    if: &build github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.repository != 'chen08209/FlClash' || startsWith(github.ref, 'refs/tags/v')))
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: pubspec.yaml
+          sparse-checkout-cone-mode: false
+
+      - name: Resolve the version
+        id: resolve
+        env:
+          TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+        run: |
+          committed="$(sed -n 's/^version: .*+\([0-9]*\)$/\1/p' pubspec.yaml)"
+          if [[ -n "$TAG" ]]; then
+            if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-pre\.[0-9]+(\+[0-9]+)?)?$ ]]; then
+              echo "::error::$TAG is neither vX.Y.Z nor vX.Y.Z-pre.N[+M]"
+              exit 1
+            fi
+            name="${BASH_REMATCH[1]}"
+            build="$(date -u +%Y%m%d%H)"
+            if ((build <= ${committed:-0})); then
+              build=$((committed + 1))
+            fi
+            version="$name+$build"
+            package_tag="$TAG"
+          else
+            version="$(sed -n 's/^version: //p' pubspec.yaml)"
+            name="${version%%+*}"
+            # The packager names artifacts after a v* tag; a fork tag is not one.
+            package_tag="v$name"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$package_tag" >> "$GITHUB_OUTPUT"
+          echo "building $version as $package_tag"
+
   build-matrix:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.repository != 'chen08209/FlClash' || startsWith(github.ref, 'refs/tags/v')))
+    name: Build matrix
+    if: *build
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
@@ -377,13 +436,40 @@ jobs:
           PYTHON
 
   build:
-    needs: build-matrix
+    name: Release build
+    # The upstream release builds the full matrix from the tag; a fork builds
+    # the platforms its dispatch selected through `build-matrix`.
+    if: github.repository == 'chen08209/FlClash' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.build-matrix.outputs.matrix) }}
+      matrix:
+        include:
+          - platform: android
+            os: ubuntu-latest
+          - platform: windows
+            os: Windows-2022
+            arch: amd64
+          - platform: linux
+            os: ubuntu-22.04
+            arch: amd64
+          - platform: macos
+            os: macos-15-intel
+            arch: amd64
+          - platform: macos
+            os: macos-latest
+            arch: arm64
+          - platform: windows
+            os: windows-11-arm
+            arch: arm64
+            flutter-channel: master
+          - platform: linux
+            os: ubuntu-24.04-arm
+            arch: arm64
+            flutter-channel: master
 
-    steps:
+    steps: &build-steps
       - name: Setup rust
         if: startsWith(matrix.os, 'windows-11-arm')
         shell: pwsh
@@ -397,6 +483,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Apply the resolved version
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          sed "s/^version: .*/version: $VERSION/" pubspec.yaml > pubspec.yaml.tmp
+          mv pubspec.yaml.tmp pubspec.yaml
 
       - name: Setup Android Signing
         if: startsWith(matrix.platform,'android')
@@ -461,11 +555,6 @@ jobs:
           flutter --version
           flutter pub get
 
-      # See .agents/flutter-upgrade.md before bumping FLUTTER_VERSION.
-      - name: Disable Impeller on Intel macOS
-        if: matrix.platform == 'macos' && matrix.arch == 'amd64'
-        run: plutil -replace FLTEnableImpeller -bool NO macos/Runner/Info.plist
-
       # The core embeds this bundle and FlClashHttpOverrides.trustCoreRoots loads it for Dart.
       # Pinned by hash, so a new bundle from https://curl.se/docs/caextract.html is a reviewed bump.
       - name: Fetch CA certificates
@@ -479,9 +568,19 @@ jobs:
           echo "$CA_BUNDLE_SHA256  $bundle" | sha256sum -c -
 
       - name: Setup
+        shell: bash
         env:
           ANDROID_NDK_HOME: ${{ steps.build-ndk.outputs.ndk-path }}
-        run: dart setup.dart ${{ matrix.platform }} ${{ (env.IS_STABLE == 'true' || github.repository != 'chen08209/FlClash') && '--env stable' || '' }} -v
+          # The setup hook builds the Core for the host slice only, so an x86_64 slice in the arm64 app cannot run.
+          FLUTTER_MACOS_ARM64_ONLY: ${{ matrix.platform == 'macos' && matrix.arch == 'arm64' }}
+          PACKAGE_TAG: ${{ needs.version.outputs.tag }}
+        # `dart run` first runs every build hook for this runner, Linux GTK and the Go core included; the packager builds them for the target itself.
+        run: |
+          args=(--tag "$PACKAGE_TAG")
+          if [[ "$IS_STABLE" == 'true' ]]; then
+            args+=(--env stable)
+          fi
+          dart tool/package.dart ${{ matrix.platform }} "${args[@]}" -v
 
       - name: Upload
         uses: actions/upload-artifact@v4
@@ -489,57 +588,21 @@ jobs:
           name: artifact-${{ matrix.platform }}${{ matrix.arch && format('-{0}', matrix.arch) }}
           path: ./dist
           overwrite: true
-          if-no-files-found: error
 
-  fork-release:
-    if: github.repository != 'chen08209/FlClash' && github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
-    needs: [build, dart, plugins, go, android, rust, windows-helper-test]
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download packages
-        uses: actions/download-artifact@v4
-        with:
-          path: ./dist
-          pattern: artifact-*
-          merge-multiple: true
-
-      - name: Publish fork release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-          SOURCE_SHA: ${{ github.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          (cd dist && sha256sum ./* > SHA256SUMS)
-          cat > release.md <<EOF
-          本次所选平台安装包由 GitHub Actions 构建并发布。
-
-          - 源码提交：$SOURCE_SHA
-          - 构建记录：$RUN_URL
-          - 包含宽窄窗口共用的仪表盘卡片添加和隐藏、Wi-Fi SSID 规则编辑、独立系统代理和虚拟网卡开关、拖拽崩溃规避及 macOS 隐藏菜单栏图标设置。
-          - Actions 构建包的校验值见 SHA256SUMS。
-          - macOS ARM64 如已单独上传，则为本地构建，校验值见 SHA256SUMS-macos-arm64。
-          - 未配置 Android 发布密钥时，APK 使用开发应用标识和调试签名。
-          EOF
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            tag_sha=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)
-            test "$tag_sha" = "$SOURCE_SHA" || { echo 'Release tag points to a different commit.' >&2; exit 1; }
-            gh release upload "$RELEASE_TAG" ./dist/* --clobber
-            gh release edit "$RELEASE_TAG" --notes-file release.md
-          else
-            gh release create "$RELEASE_TAG" ./dist/* --target "$SOURCE_SHA" \
-              --title "FlClash $RELEASE_TAG" --notes-file release.md --prerelease
-          fi
+  fork-build:
+    name: Fork build
+    if: *build
+    needs: [version, build-matrix]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.build-matrix.outputs.matrix) }}
+    steps: *build-steps
 
   upload:
-    if: github.repository == 'chen08209/FlClash' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
-    needs: [ build, dart, plugins, go, android, rust, windows-helper-test ]
+    needs: [ version, build, dart, plugins, go, android, rust, windows-helper-test ]
     runs-on: ubuntu-latest
     services:
       telegram-bot-api:
@@ -556,12 +619,17 @@ jobs:
           fetch-depth: 0
           submodules: true
 
+      - name: Apply the tag's version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          sed -i "s/^version: .*/version: $VERSION/" pubspec.yaml
+
       - name: Download
         uses: actions/download-artifact@v4
         with:
-          path: ./dist/
+          path: ./artifacts/
           pattern: artifact-*
-          merge-multiple: true
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -576,6 +644,9 @@ jobs:
       - name: Skip native build hooks
         run: |
           yq -i '.hooks.user_defines.setup.build_assets = false | .hooks.user_defines.rust_api.build_assets = false' pubspec.yaml
+
+      - name: Merge the build manifests
+        run: dart run tool/package.dart merge artifacts/* --out dist
 
       - name: Generate release notes
         shell: bash
@@ -604,14 +675,12 @@ jobs:
 
       - name: Patch release.md
         run: |
-          version=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          sed "s|VERSION|$version|g" ./.github/release_template.md >> release.md
+          version=$(jq -r '.artifacts[0].version' dist/manifest.json)
+          sed -e "s|TAG|${{ github.ref_name }}|g" -e "s|VERSION|$version|g" \
+            ./.github/release_template.md >> release.md
 
-      - name: Generate sha256
-        if: ${{ env.IS_STABLE == 'true' }}
-        run: |
-          cd ./dist
-          sha256sum ./* > SHA256SUMS
+      - name: Check every file the release is looked up by
+        run: dart run tool/package.dart check dist
 
       - name: Release
         if: ${{ env.IS_STABLE == 'true' }}
@@ -623,9 +692,12 @@ jobs:
       - name: Create Homebrew Cask Source Dir
         if: ${{ env.IS_STABLE == 'true' }}
         run: |
-          version=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          arm_sha=$(sha256sum "./dist/FlClash-${version}-macos-arm64.dmg" | awk '{print $1}')
-          amd_sha=$(sha256sum "./dist/FlClash-${version}-macos-amd64.dmg" | awk '{print $1}')
+          dmg() {
+            jq -er --arg arch "$1" '.artifacts[] | select(.os == "macos" and .arch == $arch)' dist/manifest.json
+          }
+          version=$(dmg arm64 | jq -r .version)
+          arm_sha=$(dmg arm64 | jq -r .sha256)
+          amd_sha=$(dmg amd64 | jq -r .sha256)
 
           mkdir -p ./brew/Casks
           sed \
@@ -653,8 +725,8 @@ jobs:
         if: ${{ env.IS_STABLE == 'true' }}
         run: |
           mkdir -p ./tmp
-          cp ./dist/*android-arm64-v8a* ./tmp/ || true
-          echo "Files copied successfully"
+          apk=$(jq -er '.artifacts[] | select(.os == "android" and .arch == "arm64") | .name' dist/manifest.json)
+          cp "./dist/$apk" ./tmp/
 
       - name: Push to fdroid repo
         if: ${{ env.IS_STABLE == 'true' }}
@@ -670,3 +742,46 @@ jobs:
           target-branch: main
           commit-message: Update from ${{ github.ref_name }}
           target-directory: /tmp/
+
+  fork-release:
+    if: github.repository != 'chen08209/FlClash' && github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    needs: [fork-build, dart, plugins, go, android, rust, windows-helper-test]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist
+          pattern: artifact-*
+          merge-multiple: true
+
+      - name: Publish fork release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          cat > release.md <<EOF
+          本次所选平台安装包由 GitHub Actions 构建并发布。
+
+          - 源码提交：$SOURCE_SHA
+          - 构建记录：$RUN_URL
+          - 同步上游 v0.9.4：Wi-Fi SSID 改由 rust_api 与应用内 Kotlin 读取，增加网络接管卡片、MITM、连接应用图标与日志详情等，完整条目见 CHANGELOG。
+          - 保留本分支改动：macOS 关闭窗口后驻留菜单栏、可隐藏菜单栏图标、默认请求 Wi-Fi SSID 位置权限、仪表盘默认显示全部卡片。
+          - 安装包校验值见 release 中的 SHA256SUMS 文件，包清单见 manifest.json。
+          - macOS ARM64 默认由 Actions 构建；未配置 Android 发布密钥时，APK 使用开发应用标识和调试签名。
+          EOF
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            tag_sha=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)
+            test "$tag_sha" = "$SOURCE_SHA" || { echo 'Release tag points to a different commit.' >&2; exit 1; }
+            gh release upload "$RELEASE_TAG" ./dist/* --clobber
+            gh release edit "$RELEASE_TAG" --notes-file release.md
+          else
+            gh release create "$RELEASE_TAG" ./dist/* --target "$SOURCE_SHA" \
+              --title "FlClash $RELEASE_TAG" --notes-file release.md --prerelease
+          fi

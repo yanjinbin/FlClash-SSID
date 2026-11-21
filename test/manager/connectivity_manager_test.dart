@@ -1,13 +1,8 @@
 import 'dart:async';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:fl_clash/core/controller.dart';
-import 'package:fl_clash/core/interface.dart';
+import 'package:fl_clash/common/constant.dart';
 import 'package:fl_clash/manager/connectivity_manager.dart';
-import 'package:fl_clash/enum/enum.dart';
-import 'package:fl_clash/models/models.dart';
-import 'package:fl_clash/providers/core.dart';
-import 'package:fl_clash/providers/state.dart';
+import 'package:fl_clash/plugins/wifi_ssid.dart';
 import 'package:fl_clash/providers/app.dart';
 import 'package:fl_clash/providers/config.dart';
 import 'package:fl_clash/providers/on_demand.dart';
@@ -16,47 +11,23 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
-import 'package:wifi_ssid/wifi_ssid.dart';
+import 'package:rust_api/rust_api.dart' show NetworkState;
 
-class _MockCoreHandlerInterface extends Mock implements CoreHandlerInterface {}
+const _wifi = NetworkState(wifi: true, vpn: false);
+const _offWifi = NetworkState(wifi: false, vpn: false);
 
 void main() {
-  late ProviderContainer container;
-  late StreamController<List<ConnectivityResult>> connectivity;
-  late _MockCoreHandlerInterface core;
-
   setUpAll(() {
-    registerFallbackValue(
-      const UpdateParams(
-        tun: Tun(),
-        mixedPort: 7890,
-        allowLan: false,
-        findProcessMode: FindProcessMode.off,
-        mode: Mode.rule,
-        logLevel: LogLevel.info,
-        ipv6: false,
-        tcpConcurrent: false,
-        externalController: ExternalControllerStatus.close,
-        unifiedDelay: false,
-        options: CoreOptions(testUrl: ''),
-      ),
-    );
+    wifiSsidManager.resetForTesting(const AndroidWifiSsidHost());
   });
 
+  late ProviderContainer container;
+  late StreamController<NetworkState> connectivity;
+
   setUp(() {
-    core = _MockCoreHandlerInterface();
-    when(() => core.updateConfig(any())).thenAnswer((_) async => '');
-    when(() => core.closeConnections()).thenAnswer((_) async => true);
-    container = ProviderContainer(
-      overrides: [
-        currentProfileProvider.overrideWithValue(null),
-        coreHandlerProvider.overrideWithValue(CoreController.scoped(core)),
-      ],
-    );
-    container.listen(configProvider, (_, _) {});
+    container = ProviderContainer();
     globalState.container = container;
-    connectivity = StreamController<List<ConnectivityResult>>.broadcast();
+    connectivity = StreamController<NetworkState>.broadcast();
   });
 
   tearDown(() async {
@@ -72,9 +43,7 @@ void main() {
   Future<void> pumpManager(
     WidgetTester tester, {
     required SsidReader readSsid,
-    void Function(List<ConnectivityResult>)? onConnectivityChanged,
-    Future<List<ConnectivityResult>> Function()? checkConnectivity,
-    Stream<String?>? ssidChanges,
+    void Function(NetworkState)? onConnectivityChanged,
     List<String> excludeSSIDs = const ['Home'],
   }) async {
     await tester.pumpWidget(
@@ -83,8 +52,6 @@ void main() {
         child: ConnectivityManager(
           connectivityStream: connectivity.stream,
           readSsid: readSsid,
-          ssidChanges: ssidChanges ?? const Stream.empty(),
-          checkConnectivity: checkConnectivity,
           onConnectivityChanged: onConnectivityChanged,
           child: const SizedBox.shrink(),
         ),
@@ -98,7 +65,7 @@ void main() {
   testWidgets('publishes the SSID once Wi-Fi is up', (tester) async {
     await pumpManager(tester, readSsid: () async => 'Home');
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pumpAndSettle();
 
     expect(currentSsid(), 'Home');
@@ -107,9 +74,9 @@ void main() {
   testWidgets('clears the SSID when Wi-Fi drops', (tester) async {
     await pumpManager(tester, readSsid: () async => 'Home');
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pumpAndSettle();
-    connectivity.add([ConnectivityResult.mobile]);
+    connectivity.add(_offWifi);
     await tester.pumpAndSettle();
 
     expect(currentSsid(), isNull);
@@ -125,7 +92,7 @@ void main() {
       },
     );
 
-    connectivity.add([ConnectivityResult.mobile]);
+    connectivity.add(_offWifi);
     await tester.pumpAndSettle();
 
     expect(reads, 0);
@@ -144,7 +111,7 @@ void main() {
       },
     );
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pumpAndSettle();
 
     expect(reads, 0);
@@ -160,7 +127,7 @@ void main() {
       readSsid: () async => 'Home',
     );
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pumpAndSettle();
     expect(currentSsid(), isNull);
 
@@ -173,14 +140,14 @@ void main() {
   testWidgets('reads the SSID again once location permission is granted', (
     tester,
   ) async {
-    const channel = MethodChannel('wifi_ssid');
+    const channel = MethodChannel('$packageName/wifi_ssid');
     final messenger = tester.binding.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(channel, (_) async => 0);
     addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
     var permitted = false;
     await pumpManager(tester, readSsid: () async => permitted ? 'Home' : null);
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pumpAndSettle();
     expect(currentSsid(), isNull);
 
@@ -207,7 +174,7 @@ void main() {
       },
     );
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pumpAndSettle();
     expect(currentSsid(), 'Home');
 
@@ -226,7 +193,7 @@ void main() {
       readSsid: () async => throw Exception('Context not available'),
     );
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -243,12 +210,12 @@ void main() {
       },
     );
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pumpAndSettle();
     expect(currentSsid(), 'Home');
 
     shouldFail = true;
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pumpAndSettle();
 
     expect(currentSsid(), isNull);
@@ -262,9 +229,9 @@ void main() {
     var index = 0;
     await pumpManager(tester, readSsid: () => gates[index++].future);
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pump();
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pump();
 
     gates[1].complete('Office');
@@ -287,9 +254,9 @@ void main() {
     final gate = Completer<String?>();
     await pumpManager(tester, readSsid: () => gate.future);
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pump();
-    connectivity.add([ConnectivityResult.none]);
+    connectivity.add(_offWifi);
     await tester.pump();
 
     gate.complete('Home');
@@ -313,7 +280,7 @@ void main() {
       },
     );
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pumpAndSettle();
 
     expect(reads, 0);
@@ -321,29 +288,26 @@ void main() {
   });
 
   testWidgets('forwards every result to the callback', (tester) async {
-    final seen = <List<ConnectivityResult>>[];
+    final seen = <NetworkState>[];
     await pumpManager(
       tester,
       readSsid: () async => 'Home',
       onConnectivityChanged: seen.add,
     );
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pumpAndSettle();
-    connectivity.add([ConnectivityResult.none]);
+    connectivity.add(_offWifi);
     await tester.pumpAndSettle();
 
-    expect(seen, [
-      [ConnectivityResult.wifi],
-      [ConnectivityResult.none],
-    ]);
+    expect(seen, [_wifi, _offWifi]);
   });
 
   testWidgets('a read that resolves after disposal is dropped', (tester) async {
     final gate = Completer<String?>();
     await pumpManager(tester, readSsid: () => gate.future);
 
-    connectivity.add([ConnectivityResult.wifi]);
+    connectivity.add(_wifi);
     await tester.pump();
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -351,591 +315,5 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-  });
-  Future<void> enableModes(
-    WidgetTester tester, {
-    Mode fallback = Mode.rule,
-  }) async {
-    container.read(wifiModeSettingProvider.notifier).value = WifiModeSettings(
-      enabled: true,
-      rules: const {'ASUS395': Mode.direct, 'Office': Mode.global},
-      fallback: fallback,
-    );
-    await tester.pumpAndSettle();
-  }
-
-  Mode currentMode() => container.read(patchClashConfigProvider).mode;
-
-  for (final transport in [ConnectivityResult.vpn, ConnectivityResult.other]) {
-    testWidgets('reads the SSID through a $transport transport', (
-      tester,
-    ) async {
-      await pumpManager(
-        tester,
-        readSsid: () async => 'ASUS395',
-        excludeSSIDs: [],
-      );
-      await enableModes(tester);
-      connectivity.add([transport]);
-      await tester.pumpAndSettle();
-      expect(container.read(currentSSIDProvider), 'ASUS395');
-      expect(currentMode(), Mode.direct);
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-  }
-
-  testWidgets('switches all three modes without an excluded SSID', (
-    tester,
-  ) async {
-    var ssid = 'ASUS395';
-    await pumpManager(tester, readSsid: () async => ssid, excludeSSIDs: []);
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct);
-    expect(container.read(suspendProvider), isFalse);
-
-    ssid = 'Office';
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.global);
-
-    ssid = 'asus395';
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.rule, reason: 'SSID matching is case sensitive');
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('uses the fallback when Wi-Fi drops or the SSID cannot be read', (
-    tester,
-  ) async {
-    String? ssid = 'ASUS395';
-    await pumpManager(tester, readSsid: () async => ssid);
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct);
-    ssid = null;
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.rule);
-    ssid = 'ASUS395';
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct);
-    connectivity.add([ConnectivityResult.mobile]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.rule);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('restores the SSID rule after a manual mode change', (
-    tester,
-  ) async {
-    var ssid = 'ASUS395';
-    await pumpManager(tester, readSsid: () async => ssid);
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    container
-        .read(patchClashConfigProvider.notifier)
-        .update((state) => state.copyWith(mode: Mode.rule));
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct);
-    ssid = 'Office';
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.global);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  for (final mode in Mode.values) {
-    testWidgets('enforces a $mode rule with a different fallback', (
-      tester,
-    ) async {
-      await pumpManager(tester, readSsid: () async => 'Home', excludeSSIDs: []);
-      final fallback = mode == Mode.direct ? Mode.global : Mode.direct;
-      container.read(wifiModeSettingProvider.notifier).value = WifiModeSettings(
-        enabled: true,
-        rules: {'Home': mode},
-        fallback: fallback,
-      );
-      connectivity.add([ConnectivityResult.wifi]);
-      await tester.pumpAndSettle();
-      expect(currentMode(), mode);
-
-      container
-          .read(patchClashConfigProvider.notifier)
-          .update((state) => state.copyWith(mode: fallback));
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
-      expect(currentMode(), mode);
-      connectivity.add([ConnectivityResult.none]);
-      await tester.pumpAndSettle();
-      expect(currentMode(), fallback);
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-
-    for (final transport in [
-      ConnectivityResult.none,
-      ConnectivityResult.mobile,
-      ConnectivityResult.ethernet,
-      ConnectivityResult.wifi,
-    ]) {
-      testWidgets('restores the $mode fallback on $transport', (tester) async {
-        var reads = 0;
-        await pumpManager(
-          tester,
-          readSsid: () async {
-            reads++;
-            return null;
-          },
-          excludeSSIDs: [],
-        );
-        await enableModes(tester, fallback: mode);
-        connectivity.add([transport]);
-        await tester.pumpAndSettle();
-        expect(currentMode(), mode);
-        clearInteractions(core);
-
-        container
-            .read(patchClashConfigProvider.notifier)
-            .update(
-              (state) => state.copyWith(
-                mode: mode == Mode.direct ? Mode.global : Mode.direct,
-              ),
-            );
-        await tester.pump(const Duration(seconds: 5));
-        await tester.pumpAndSettle();
-        expect(currentMode(), mode);
-        verify(() => core.closeConnections()).called(1);
-        final updates = verify(() => core.updateConfig(captureAny())).captured;
-        expect((updates.single as UpdateParams).mode, mode);
-
-        clearInteractions(core);
-        await tester.pump(const Duration(seconds: 5));
-        await tester.pumpAndSettle();
-        verifyNever(() => core.closeConnections());
-        verifyNever(() => core.updateConfig(any()));
-        if (transport != ConnectivityResult.wifi) expect(reads, 0);
-        await tester.pumpWidget(const SizedBox.shrink());
-      });
-    }
-  }
-
-  testWidgets('an SSID event can arrive before the connectivity event', (
-    tester,
-  ) async {
-    final changes = StreamController<String?>.broadcast();
-    addTearDown(changes.close);
-    await pumpManager(
-      tester,
-      readSsid: () async => 'ASUS395',
-      ssidChanges: changes.stream,
-      excludeSSIDs: [],
-    );
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.none]);
-    await tester.pumpAndSettle();
-    changes.add('ASUS395');
-    await tester.pumpAndSettle();
-    expect(currentSsid(), 'ASUS395');
-    expect(currentMode(), Mode.direct);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('retries an unavailable SSID after joining Wi-Fi', (
-    tester,
-  ) async {
-    String? ssid;
-    await pumpManager(tester, readSsid: () async => ssid, excludeSSIDs: []);
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.rule);
-    ssid = 'ASUS395';
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('an SSID event supersedes an older connectivity check', (
-    tester,
-  ) async {
-    final changes = StreamController<String?>.broadcast();
-    addTearDown(changes.close);
-    final gate = Completer<List<ConnectivityResult>>();
-    await pumpManager(
-      tester,
-      readSsid: () async => 'ASUS395',
-      ssidChanges: changes.stream,
-      checkConnectivity: () => gate.future,
-      excludeSSIDs: [],
-    );
-    await enableModes(tester);
-    changes.add('ASUS395');
-    await tester.pumpAndSettle();
-    gate.complete([ConnectivityResult.none]);
-    await tester.pumpAndSettle();
-    expect(currentSsid(), 'ASUS395');
-    expect(currentMode(), Mode.direct);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('a connectivity event applies fallback while the SSID loads', (
-    tester,
-  ) async {
-    Completer<String?>? gate;
-    await pumpManager(
-      tester,
-      readSsid: () => gate?.future ?? Future.value('ASUS395'),
-      excludeSSIDs: [],
-    );
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct);
-
-    gate = Completer<String?>();
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pump();
-    expect(currentMode(), Mode.rule);
-    gate.complete('Office');
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.global);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('a native SSID event switches mode without waiting for a poll', (
-    tester,
-  ) async {
-    final changes = StreamController<String?>.broadcast();
-    addTearDown(changes.close);
-    var ssid = 'ASUS395';
-    await pumpManager(
-      tester,
-      readSsid: () async => ssid,
-      ssidChanges: changes.stream,
-      excludeSSIDs: [],
-    );
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct);
-    clearInteractions(core);
-
-    ssid = 'Office';
-    changes.add('Office');
-    await tester.pump();
-
-    expect(currentMode(), Mode.global);
-    verify(() => core.closeConnections()).called(1);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('a same-SSID event restores the rule after the fallback', (
-    tester,
-  ) async {
-    final changes = StreamController<String?>.broadcast();
-    addTearDown(changes.close);
-    Completer<String?>? gate;
-    await pumpManager(
-      tester,
-      readSsid: () => gate?.future ?? Future.value('ASUS395'),
-      ssidChanges: changes.stream,
-      excludeSSIDs: [],
-    );
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct);
-
-    gate = Completer<String?>();
-    changes.add('ASUS395');
-    await tester.pump();
-    expect(currentMode(), Mode.rule, reason: 'the fallback lands first');
-
-    gate.complete('ASUS395');
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct, reason: 'the rule returns');
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('the fallback lands before a slow SSID read finishes', (
-    tester,
-  ) async {
-    final changes = StreamController<String?>.broadcast();
-    addTearDown(changes.close);
-    Completer<String?>? gate;
-    await pumpManager(
-      tester,
-      readSsid: () => gate?.future ?? Future.value('ASUS395'),
-      ssidChanges: changes.stream,
-      excludeSSIDs: [],
-    );
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct);
-    clearInteractions(core);
-
-    gate = Completer<String?>();
-    changes.add('Office');
-    await tester.pump();
-
-    expect(
-      currentMode(),
-      Mode.rule,
-      reason: 'the event applies the fallback before the read resolves',
-    );
-    verifyNever(() => core.closeConnections());
-
-    gate.complete('Office');
-    await tester.pumpAndSettle();
-
-    expect(currentMode(), Mode.global);
-    verify(() => core.closeConnections()).called(1);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('the one second poll catches a change the native event missed', (
-    tester,
-  ) async {
-    var ssid = 'ASUS395';
-    await pumpManager(tester, readSsid: () async => ssid, excludeSSIDs: []);
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct);
-
-    ssid = 'Office';
-    await tester.pump(const Duration(seconds: 1));
-
-    expect(currentMode(), Mode.global);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('polling backs off once the network has been quiet a while', (
-    tester,
-  ) async {
-    var ssid = 'ASUS395';
-    await pumpManager(tester, readSsid: () async => ssid, excludeSSIDs: []);
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.direct);
-
-    await tester.pump(const Duration(seconds: 31));
-    ssid = 'Office';
-    await tester.pump(const Duration(seconds: 2));
-    expect(
-      currentMode(),
-      Mode.direct,
-      reason: 'the idle poll runs every five seconds',
-    );
-
-    await tester.pump(const Duration(seconds: 4));
-    expect(currentMode(), Mode.global);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('disabling automation cancels polling and mode changes', (
-    tester,
-  ) async {
-    var reads = 0;
-    await pumpManager(
-      tester,
-      excludeSSIDs: [],
-      readSsid: () async {
-        reads++;
-        return 'ASUS395';
-      },
-    );
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    final previousReads = reads;
-    container
-        .read(wifiModeSettingProvider.notifier)
-        .update((state) => state.copyWith(enabled: false));
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(seconds: 10));
-    expect(reads, previousReads);
-    expect(currentMode(), Mode.direct);
-    container
-        .read(patchClashConfigProvider.notifier)
-        .update((state) => state.copyWith(mode: Mode.global));
-    connectivity.add([ConnectivityResult.none]);
-    await tester.pump(const Duration(seconds: 10));
-    expect(currentMode(), Mode.global);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('applies changes to a rule for the connected SSID', (
-    tester,
-  ) async {
-    await pumpManager(
-      tester,
-      readSsid: () async => 'ASUS395',
-      excludeSSIDs: ['ASUS395'],
-    );
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(container.read(suspendProvider), isFalse);
-    container
-        .read(wifiModeSettingProvider.notifier)
-        .update((state) => state.copyWith(rules: {'ASUS395': Mode.global}));
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.global);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('reads connectivity on startup without waiting for an event', (
-    tester,
-  ) async {
-    await pumpManager(
-      tester,
-      readSsid: () async => 'ASUS395',
-      checkConnectivity: () async => [ConnectivityResult.wifi],
-    );
-    await enableModes(tester);
-    expect(currentMode(), Mode.direct);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('a late SSID read cannot change mode after leaving Wi-Fi', (
-    tester,
-  ) async {
-    final gate = Completer<String?>();
-    await pumpManager(tester, readSsid: () => gate.future);
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pump();
-    connectivity.add([ConnectivityResult.mobile]);
-    await tester.pumpAndSettle();
-    gate.complete('ASUS395');
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.rule);
-    expect(currentSsid(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('a late SSID read cannot replace a newer network rule', (
-    tester,
-  ) async {
-    final gate = Completer<String?>();
-    var reads = 0;
-    await pumpManager(
-      tester,
-      readSsid: () => reads++ == 0 ? gate.future : Future.value('Office'),
-      excludeSSIDs: [],
-    );
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pump();
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.global);
-    clearInteractions(core);
-    gate.complete('ASUS395');
-    await tester.pumpAndSettle();
-    expect(currentSsid(), 'Office');
-    expect(currentMode(), Mode.global);
-    verifyNever(() => core.updateConfig(any()));
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-  testWidgets('a failed read and a timeout apply the configured fallback', (
-    tester,
-  ) async {
-    var hanging = false;
-    final gate = Completer<String?>();
-    await pumpManager(
-      tester,
-      readSsid: () {
-        if (hanging) return gate.future;
-        return Future.error(StateError('unavailable'));
-      },
-    );
-    await enableModes(tester, fallback: Mode.global);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentMode(), Mode.global);
-    hanging = true;
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 4));
-    expect(currentMode(), Mode.global);
-    await tester.pumpWidget(const SizedBox.shrink());
-    gate.complete('ASUS395');
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('safe mode never applies automation', (tester) async {
-    container.dispose();
-    container = ProviderContainer(
-      overrides: [safeModeProvider.overrideWithValue(true)],
-    );
-    container.listen(configProvider, (_, _) {});
-    globalState.container = container;
-    var reads = 0;
-    await pumpManager(
-      tester,
-      readSsid: () async {
-        reads++;
-        return 'ASUS395';
-      },
-    );
-    await enableModes(tester, fallback: Mode.direct);
-    connectivity.add([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(seconds: 10));
-    expect(reads, 0);
-    expect(currentMode(), Mode.rule);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('resuming reads the network again', (tester) async {
-    var ssid = 'ASUS395';
-    var checks = 0;
-    await pumpManager(
-      tester,
-      readSsid: () async => ssid,
-      checkConnectivity: () async {
-        checks++;
-        return [ConnectivityResult.wifi];
-      },
-    );
-    await enableModes(tester);
-    expect(currentMode(), Mode.direct);
-    ssid = 'Office';
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pumpAndSettle();
-    expect(checks, 2);
-    expect(currentMode(), Mode.global);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('a late startup network check cannot override a newer event', (
-    tester,
-  ) async {
-    final gate = Completer<List<ConnectivityResult>>();
-    await pumpManager(
-      tester,
-      readSsid: () async => 'ASUS395',
-      checkConnectivity: () => gate.future,
-    );
-    await enableModes(tester);
-    connectivity.add([ConnectivityResult.mobile]);
-    await tester.pumpAndSettle();
-    gate.complete([ConnectivityResult.wifi]);
-    await tester.pumpAndSettle();
-    expect(currentSsid(), isNull);
-    expect(currentMode(), Mode.rule);
-    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

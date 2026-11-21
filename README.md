@@ -43,12 +43,11 @@ This is a personal fork of [FlClash](https://github.com/chen08209/FlClash) with 
 ## Fork changes
 
 - **Wi-Fi SSID rules.** Pick an outbound mode per SSID with a fallback for everything else (for example, direct at
-  home and rules everywhere else). Native SSID events drive the switch, a short poll covers missed ones, the fallback
-  applies before the new SSID is read, and existing connections are dropped so nothing keeps the previous mode.
-- **Separate switches** for the system proxy and the TUN interface.
-- **Dashboard cards** can be added and hidden in wide windows.
-- **macOS menu bar icon** can be hidden.
-- **Drag crash fix** on the desktop.
+  home and rules everywhere else). A short poll picks the SSID up, an SSID that cannot be read falls back, and existing
+  connections are dropped so nothing keeps the previous mode.
+- **The SSID location permission is asked for by default**, not only once an excluded network or a rule needs it.
+- **Every dashboard card is shown by default**, on Android too; hide the ones you do not want in the editor.
+- **macOS keeps running in the menu bar** when its window closes, and the menu bar icon can be hidden.
 
 ## Download
 
@@ -56,7 +55,7 @@ Get the latest build from [GitHub Releases](https://github.com/yanjinbin/FlClash
 
 | Platform | Packages | Notes |
 | --- | --- | --- |
-| Android | APK for `arm64-v8a`, `armeabi-v7a` and `x86_64` | Most phones use `arm64-v8a`. |
+| Android | APK for `arm64` (arm64-v8a), `armv7` (armeabi-v7a) and `amd64` (x86_64) | Most phones use `arm64`. |
 | Windows 10 and later | Installer (`.exe`) or portable `.zip`, for x64 and ARM64 | Pick ARM64 on Snapdragon and other ARM laptops. |
 | macOS 12 and later | DMG for Apple Silicon and Intel | Also on Homebrew. |
 | Linux | `.deb`, `.rpm` and AppImage, for x64 and ARM64 | See the tray note below. |
@@ -73,13 +72,8 @@ brew install --cask yanjinbin/tap/flclash-ssid
 
 **Linux tray icon**
 
-The `.deb` package installs its own dependencies. With the AppImage or the `.rpm`, install the AyatanaAppIndicator
-library so the tray icon can show:
-
-```bash
-sudo apt-get install libayatana-appindicator3-1   # Debian and Ubuntu
-sudo dnf install libayatana-appindicator-gtk3     # Fedora
-```
+The tray icon is a StatusNotifierItem. KDE Plasma, XFCE and most panels show it as is; GNOME needs the
+AppIndicator and KStatusNotifierItem Support extension.
 
 **Unattended desktop**
 
@@ -112,7 +106,7 @@ adb shell am start -a com.follow.clash.action.TOGGLE
 
 ## Build from source
 
-You need [Flutter](https://docs.flutter.dev/get-started/install) 3.47 (release builds use 3.47.6),
+You need [Flutter](https://docs.flutter.dev/get-started/install) 3.50 (release builds use 3.50.0),
 [Go](https://go.dev/dl/) 1.27 and [Rust](https://rustup.rs/) installed through rustup. Each platform builds on its own
 host, except Android, which builds anywhere.
 
@@ -120,7 +114,7 @@ host, except Android, which builds anywhere.
 git clone --recursive https://github.com/yanjinbin/FlClash-SSID.git
 cd FlClash-SSID
 flutter pub get
-dart setup.dart android   # or windows, macos, linux
+dart run tool/package.dart android   # or windows, macos, linux
 ```
 
 Packages land in `dist/`. The Go core and the Rust libraries are compiled as part of the Flutter build.
@@ -132,7 +126,7 @@ Packages land in `dist/`. The Go core and the Rust libraries are compiled as par
 | macOS | Xcode and Node.js. The script installs `appdmg` through npm. |
 | Linux | Debian or Ubuntu. The script installs the build packages with apt and downloads `appimagetool`. |
 
-Run `dart setup.dart --help` for the remaining options, such as `--targets` to build only some package formats.
+Run `dart run tool/package.dart --help` for the remaining options, such as `--targets` to build only some package formats or `--dry-run` to list the files a run would write.
 
 ## Support
 

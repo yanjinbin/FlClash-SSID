@@ -30,6 +30,24 @@ const defaultBypassDomain = [
   '192.168.*',
 ];
 
+/// WinINet's entry for every host without a dot; the other platforms leave it
+/// out when they write the list.
+const windowsLocalBypass = '<local>';
+
+/// The field default keeps the shared list because it must be const.
+final List<String> platformDefaultBypassDomain = system.isWindows
+    ? const [...defaultBypassDomain, windowsLocalBypass]
+    : defaultBypassDomain;
+
+/// `%mixed-port%` is replaced with the mixed port when the script is served.
+const defaultPacScript = '''function FindProxyForURL(url, host) {
+  if (isPlainHostName(host)) {
+    return "DIRECT";
+  }
+  return "PROXY 127.0.0.1:%mixed-port%; SOCKS5 127.0.0.1:%mixed-port%; DIRECT";
+}
+''';
+
 const defaultUserAgents = ['clash-verge/v2.4.2', 'ClashforWindows/0.19.23'];
 
 const defaultFilters = [
@@ -109,14 +127,12 @@ final List<HotKeyAction> defaultHotKeyActions = system.isWindows
         _defaultHotKeyAction(HotAction.delayTest, PhysicalKeyboardKey.keyD),
       ];
 
-/// Every card starts shown; the dashboard drops the ones a platform lacks.
 const List<DashboardWidget> defaultDashboardWidgets = [
   DashboardWidget.currentOutbound,
   DashboardWidget.networkSpeed,
   DashboardWidget.outboundMode,
   DashboardWidget.vpnButton,
-  DashboardWidget.systemProxy,
-  DashboardWidget.tun,
+  DashboardWidget.networkTakeover,
   DashboardWidget.wifiMode,
   DashboardWidget.intranetIp,
   DashboardWidget.serviceStatus,
@@ -125,6 +141,11 @@ const List<DashboardWidget> defaultDashboardWidgets = [
   DashboardWidget.connectionStats,
   DashboardWidget.memoryInfo,
 ];
+
+/// Every platform starts with every card; the dashboard drops the ones it
+/// lacks, and the editor lets the user hide the rest.
+const List<DashboardWidget> platformDefaultDashboardWidgets =
+    defaultDashboardWidgets;
 
 const _legacyDefaultDashboardWidgets = {
   'networkSpeed',
@@ -141,8 +162,10 @@ const _legacyDefaultDashboardWidgets = {
 const _legacyDashboardWidgets = {
   'networkDetection': DashboardWidget.intranetIp,
   'outboundModeV2': DashboardWidget.outboundMode,
-  'systemProxyButton': DashboardWidget.systemProxy,
-  'tunButton': DashboardWidget.tun,
+  'systemProxyButton': DashboardWidget.networkTakeover,
+  'tunButton': DashboardWidget.networkTakeover,
+  'systemProxy': DashboardWidget.networkTakeover,
+  'tun': DashboardWidget.networkTakeover,
   'connections': DashboardWidget.connectionStats,
   'requests': DashboardWidget.connectionStats,
   'dnsQueries': DashboardWidget.connectionStats,
@@ -160,17 +183,8 @@ List<DashboardWidget> dashboardWidgetsFromJson(
   List<dynamic>? dashboardWidgets,
 ) {
   if (dashboardWidgets == null) {
-    return defaultDashboardWidgets;
+    return platformDefaultDashboardWidgets;
   }
-  dashboardWidgets = [
-    for (final name in dashboardWidgets)
-      if (name == 'networkTakeover') ...[
-        DashboardWidget.systemProxy.name,
-        DashboardWidget.tun.name,
-        DashboardWidget.wifiMode.name,
-      ] else
-        name,
-  ];
   final byName = DashboardWidget.values.asNameMap();
   if (dashboardWidgets.contains(DashboardWidget.currentOutbound.name)) {
     return dashboardWidgets
@@ -185,14 +199,14 @@ List<DashboardWidget> dashboardWidgetsFromJson(
   };
   if (names.length == _legacyDefaultDashboardWidgets.length &&
       names.containsAll(_legacyDefaultDashboardWidgets)) {
-    return defaultDashboardWidgets;
+    return platformDefaultDashboardWidgets;
   }
   final kept = dashboardWidgets
       .map((e) => _legacyDashboardWidgets[e] ?? byName[e])
       .nonNulls;
   if (kept.isEmpty &&
       !dashboardWidgets.every(_retiredDashboardWidgets.contains)) {
-    return defaultDashboardWidgets;
+    return platformDefaultDashboardWidgets;
   }
   return {DashboardWidget.currentOutbound, ...kept}.toList();
 }
@@ -388,8 +402,9 @@ abstract class NetworkProps with _$NetworkProps {
   const factory NetworkProps({
     @Default(true) bool systemProxy,
     @Default(defaultBypassDomain) List<String> bypassDomain,
+    @Default(false) bool pacMode,
+    @Default(defaultPacScript) String pacScript,
     @Default(true) bool bypassPrivateRoute,
-    @Default(true) bool autoSetSystemDns,
     @Default(false) bool appendSystemDns,
     @Default(defaultAuthenticationProps) AuthenticationProps authentication,
   }) = _NetworkProps;
@@ -550,6 +565,10 @@ abstract class Config with _$Config {
       return Config(
         themeProps: defaultThemeProps,
         hotKeyActions: defaultHotKeyActions,
+        appSettingProps: const AppSettingProps(
+          dashboardWidgets: platformDefaultDashboardWidgets,
+        ),
+        networkProps: NetworkProps(bypassDomain: platformDefaultBypassDomain),
       );
     }
     return Config.fromJson(json);

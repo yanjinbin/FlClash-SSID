@@ -1,25 +1,23 @@
 import 'dart:async';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
+import 'package:fl_clash/plugins/app.dart';
+import 'package:fl_clash/plugins/wifi_ssid.dart';
 import 'package:fl_clash/providers/action.dart';
 import 'package:fl_clash/providers/app.dart';
 import 'package:fl_clash/providers/config.dart';
 import 'package:fl_clash/providers/on_demand.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:wifi_ssid/wifi_ssid.dart';
+import 'package:rust_api/rust_api.dart' show NetworkState, networkChanges;
 
 typedef SsidReader = Future<String?> Function();
 
 class ConnectivityManager extends ConsumerStatefulWidget {
-  final Function(List<ConnectivityResult> results)? onConnectivityChanged;
-  final Stream<List<ConnectivityResult>>? connectivityStream;
+  final Function(NetworkState state)? onConnectivityChanged;
+  final Stream<NetworkState>? connectivityStream;
   final SsidReader? readSsid;
-  final Stream<String?>? ssidChanges;
-  final Future<List<ConnectivityResult>> Function()? checkConnectivity;
   final Widget child;
 
   const ConnectivityManager({
@@ -27,8 +25,6 @@ class ConnectivityManager extends ConsumerStatefulWidget {
     this.onConnectivityChanged,
     this.connectivityStream,
     this.readSsid,
-    this.ssidChanges,
-    this.checkConnectivity,
     required this.child,
   });
 
@@ -44,17 +40,13 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
   static const _activePollWindow = Duration(seconds: 30);
 
   late final StreamSubscription subscription;
-  StreamSubscription<String?>? _ssidChangeSubscription;
-  late final SsidReader _readSsid =
-      widget.readSsid ?? WifiSsidManager.instance.getSsid;
+  late final SsidReader _readSsid = widget.readSsid ?? wifiSsidManager.getSsid;
 
   int _ssidRequestId = 0;
-  int _connectivityRequestId = 0;
   bool _wifiPossible = false;
   Timer? _ssidTimer;
   Timer? _activityTimer;
   bool _recentActivity = false;
-  bool _transitionPending = false;
   (String?, Mode)? _lastModeDecision;
 
   @override
@@ -62,20 +54,19 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     final stream =
-        widget.connectivityStream ?? Connectivity().onConnectivityChanged;
+        widget.connectivityStream ??
+        (system.isAndroid ? app!.networkChanges : networkChanges());
     subscription = stream.listen(_handleResults);
     ref.listenManual(excludeSSIDsProvider.select((state) => state.isNotEmpty), (
       previous,
       next,
     ) {
       if (previous != next) {
-        _syncSsidWatcher();
         unawaited(_updateSsid());
       }
     });
     ref.listenManual(wifiModeSettingProvider, (previous, next) {
       _lastModeDecision = null;
-      _syncSsidWatcher();
       unawaited(_updateSsid());
     });
     ref.listenManual(
@@ -88,81 +79,19 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
         }
       },
     );
-    _syncSsidWatcher();
-    if (widget.connectivityStream == null || widget.checkConnectivity != null) {
-      unawaited(_refreshConnectivity());
-    }
   }
 
   bool get _ssidGateOpen =>
       ref.read(excludeSSIDsProvider).isNotEmpty ||
       ref.read(wifiModeSettingProvider).enabled;
 
-  void _syncSsidWatcher() {
-    if (_ssidGateOpen) {
-      _ssidChangeSubscription ??=
-          (widget.ssidChanges ?? wifiSsidManager.ssidChanges).listen(
-            (_) => _handleSsidChange(),
-            onError: _reportSsidEventError,
-          );
-      return;
-    }
-    unawaited(_ssidChangeSubscription?.cancel());
-    _ssidChangeSubscription = null;
-  }
-
-  void _reportSsidEventError(Object error) {
-    if (error is MissingPluginException) {
-      return;
-    }
-    commonPrint.log(
-      'Wi-Fi SSID events unavailable: $error',
-      logLevel: LogLevel.warning,
-    );
-  }
-
-  /// The platform says the Wi-Fi moved before the new SSID is readable, so the
-  /// fallback applies first; the mapped mode follows in `_publishSsid`.
-  void _handleSsidChange() {
-    _connectivityRequestId++;
-    _wifiPossible = true;
+  void _handleResults(NetworkState state) {
+    // A VPN hides the physical transport, so both count as possibly Wi-Fi and
+    // the SSID read decides.
+    _wifiPossible = state.wifi || state.vpn;
     _markSsidActivity();
-    _applyTransitionFallback();
     unawaited(_updateSsid());
-  }
-
-  void _applyTransitionFallback() {
-    final settings = ref.read(wifiModeSettingProvider);
-    if (settings.enabled && !ref.read(safeModeProvider)) {
-      _transitionPending = true;
-      // The fallback replaces the rule until the read finishes, so the last
-      // decision no longer describes what the Core runs.
-      _lastModeDecision = null;
-      if (ref.read(patchClashConfigProvider).mode != settings.fallback) {
-        ref
-            .read(setupActionProvider.notifier)
-            .changeMode(settings.fallback, immediate: true);
-      }
-    }
-  }
-
-  void _handleResults(List<ConnectivityResult> results) {
-    _connectivityRequestId++;
-    _wifiPossible = _isWifiPossible(results);
-    _markSsidActivity();
-    if (_wifiPossible) {
-      _applyTransitionFallback();
-    }
-    unawaited(_updateSsid());
-    widget.onConnectivityChanged?.call(results);
-  }
-
-  /// A VPN hides the physical transport: Android reports `vpn` and macOS
-  /// reports `other`, so the SSID read itself has to tell Wi-Fi from the rest.
-  static bool _isWifiPossible(List<ConnectivityResult> results) {
-    return results.contains(ConnectivityResult.wifi) ||
-        results.contains(ConnectivityResult.vpn) ||
-        results.contains(ConnectivityResult.other);
+    widget.onConnectivityChanged?.call(state);
   }
 
   void _markSsidActivity() {
@@ -171,28 +100,11 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
     _activityTimer = Timer(_activePollWindow, () => _recentActivity = false);
   }
 
-  Future<void> _refreshConnectivity() async {
-    final requestId = ++_connectivityRequestId;
-    try {
-      final results =
-          await (widget.checkConnectivity ??
-              Connectivity().checkConnectivity)();
-      if (mounted && requestId == _connectivityRequestId) {
-        _handleResults(results);
-      }
-    } catch (error) {
-      commonPrint.log(
-        'Unable to check connectivity: $error',
-        logLevel: LogLevel.warning,
-      );
-    }
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _markSsidActivity();
-      unawaited(_refreshConnectivity());
+      unawaited(_updateSsid());
     }
   }
 
@@ -202,7 +114,6 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
     // The SSID costs a blocking platform call and a location permission on
     // Android, macOS and Windows, and nothing reads it until SSID automation
     // or an excluded network asks for it.
-
     try {
       if (!_wifiPossible || ref.read(safeModeProvider) || !_ssidGateOpen) {
         _publishSsid(requestId, null);
@@ -237,20 +148,20 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
     if (requestId != _ssidRequestId || !mounted) {
       return false;
     }
+    final previous = ref.read(currentSSIDProvider);
     ref.read(currentSSIDProvider.notifier).value = ssid;
     final settings = ref.read(wifiModeSettingProvider);
     if (settings.enabled && !ref.read(safeModeProvider)) {
       final mode = settings.rules[ssid] ?? settings.fallback;
       final decision = (ssid, mode);
-      if (_lastModeDecision != decision ||
-          ref.read(patchClashConfigProvider).mode != mode) {
-        final transition = _transitionPending || _lastModeDecision?.$1 != ssid;
-        _transitionPending = false;
+      final currentMode = ref.read(patchClashConfigProvider).mode;
+      if (_lastModeDecision != decision || currentMode != mode) {
+        final switched = previous != ssid;
         _lastModeDecision = decision;
-        if (transition || ref.read(patchClashConfigProvider).mode != mode) {
+        if (switched || currentMode != mode) {
           ref
               .read(setupActionProvider.notifier)
-              .changeMode(mode, dropConnections: true);
+              .changeMode(mode, dropConnections: switched);
         }
       }
     }
@@ -263,7 +174,6 @@ class _ConnectivityManagerState extends ConsumerState<ConnectivityManager>
     _ssidTimer?.cancel();
     _activityTimer?.cancel();
     subscription.cancel();
-    unawaited(_ssidChangeSubscription?.cancel());
     super.dispose();
   }
 

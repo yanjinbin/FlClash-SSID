@@ -35,14 +35,14 @@ class _RowCase {
 final _rowCases = <_RowCase>[
   _RowCase(
     'system proxy',
-    const NetworkTakeoverCard(TakeoverSwitch.systemProxy),
+    const NetworkTakeoverCard(),
     'System proxy',
     (container) => container.read(networkSettingProvider).systemProxy,
     initial: true,
   ),
   _RowCase(
     'TUN',
-    const NetworkTakeoverCard(TakeoverSwitch.tun),
+    const NetworkTakeoverCard(),
     'TUN',
     (container) => container.read(patchClashConfigProvider).tun.enable,
   ),
@@ -87,7 +87,8 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Finder switchOf(_RowCase testCase) => find.byType(DashboardSwitch);
+  Finder switchOf(_RowCase testCase) =>
+      find.byType(DashboardSwitch).at(testCase.name == 'TUN' ? 1 : 0);
 
   for (final testCase in _rowCases) {
     testWidgets('the ${testCase.name} switch flips its setting both ways', (
@@ -132,19 +133,9 @@ void main() {
   ) async {
     await pumpCard(
       tester,
-      const LiquidGlassScope(
-        enabled: true,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            NetworkTakeoverCard(TakeoverSwitch.systemProxy),
-            NetworkTakeoverCard(TakeoverSwitch.tun),
-          ],
-        ),
-      ),
+      const LiquidGlassScope(enabled: true, child: NetworkTakeoverCard()),
     );
-    final tun = find.byType(DashboardSwitch).at(1);
-    final systemProxy = find.byType(DashboardSwitch).at(0);
+    final tun = switchOf(_rowCases[1]);
     Finder lensOf(Finder toggle) =>
         find.descendant(of: toggle, matching: find.byType(LiquidGlass));
 
@@ -154,7 +145,7 @@ void main() {
     await tester.pump(kPressTimeout);
     await tester.pump(const Duration(milliseconds: 100));
     expect(lensOf(tun), findsOneWidget);
-    expect(lensOf(systemProxy), findsNothing);
+    expect(lensOf(switchOf(_rowCases[0])), findsNothing);
     await gesture.up();
     await tester.pumpAndSettle();
 
@@ -163,8 +154,9 @@ void main() {
   });
 
   testWidgets('a row says what it is set to', (tester) async {
-    await pumpCard(tester, const NetworkTakeoverCard(TakeoverSwitch.tun));
+    await pumpCard(tester, const NetworkTakeoverCard());
 
+    expect(find.text('Port 7890'), findsOneWidget);
     expect(find.text(currentAppLocalizations.disabled), findsOneWidget);
 
     await tester.tap(switchOf(_rowCases[1]));

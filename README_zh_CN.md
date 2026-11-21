@@ -38,13 +38,11 @@
 
 ## 分支改动
 
-- **Wi-Fi SSID 规则**：按 SSID 指定分流模式，其余网络走 fallback（例如家里直连、其他网络走规则）。切换由系统
-  SSID 事件驱动，漏掉的事件由短轮询兜底；检测到关联变化时先切 fallback 再读新 SSID，并断开已有连接，避免旧
-  连接继续沿用上一个网络的模式。
-- **系统代理与 TUN 网卡**各自独立开关。
-- 宽窗口下可以**添加和隐藏仪表盘卡片**。
-- macOS 可以**隐藏菜单栏图标**。
-- 修复桌面端拖拽崩溃。
+- **Wi-Fi SSID 规则**：按 SSID 指定分流模式，其余网络走 fallback（例如家里直连、其他网络走规则）。短轮询读取
+  当前 SSID，读不到时使用 fallback，切换后断开已有连接，避免旧连接继续沿用上一个网络的模式。
+- **默认请求 Wi-Fi SSID 的位置权限**，不必先添加排除网络或规则。
+- **仪表盘默认显示全部卡片**，Android 同样如此；不想要的卡片在编辑中隐藏。
+- macOS 关闭窗口后**继续驻留菜单栏**，并可隐藏菜单栏图标。
 
 ## 下载
 
@@ -52,7 +50,7 @@
 
 | 平台 | 安装包 | 说明 |
 | --- | --- | --- |
-| Android | `arm64-v8a`、`armeabi-v7a`、`x86_64` 三种 APK | 绝大多数手机选 `arm64-v8a`。 |
+| Android | `arm64`（arm64-v8a）、`armv7`（armeabi-v7a）、`amd64`（x86_64）三种 APK | 绝大多数手机选 `arm64`。 |
 | Windows 10 及以上 | 安装版（`.exe`）或便携版（`.zip`），分 x64 与 ARM64 | 骁龙等 ARM 架构笔记本选 ARM64。 |
 | macOS 12 及以上 | Apple Silicon 与 Intel 两种 DMG | 也可以通过 Homebrew 安装。 |
 | Linux | `.deb`、`.rpm` 和 AppImage，分 x64 与 ARM64 | 托盘依赖见下方说明。 |
@@ -69,12 +67,7 @@ brew install --cask yanjinbin/tap/flclash-ssid
 
 **Linux 托盘图标**
 
-`.deb` 安装包会自动安装所需依赖。使用 AppImage 或 `.rpm` 时，需要先安装 AyatanaAppIndicator 库，托盘图标才能显示：
-
-```bash
-sudo apt-get install libayatana-appindicator3-1   # Debian 与 Ubuntu
-sudo dnf install libayatana-appindicator-gtk3     # Fedora
-```
+托盘图标是 StatusNotifierItem。KDE Plasma、XFCE 和多数面板直接显示；GNOME 需要安装 AppIndicator and KStatusNotifierItem Support 扩展。
 
 **无人值守的桌面环境**
 
@@ -105,14 +98,14 @@ adb shell am start -a com.follow.clash.action.TOGGLE
 
 ## 从源码构建
 
-需要 [Flutter](https://docs.flutter.dev/get-started/install) 3.47（正式版构建使用 3.47.6）、[Go](https://go.dev/dl/) 1.27，
+需要 [Flutter](https://docs.flutter.dev/get-started/install) 3.50（正式版构建使用 3.50.0）、[Go](https://go.dev/dl/) 1.27，
 以及通过 rustup 安装的 [Rust](https://rustup.rs/)。桌面端需要在对应系统上构建，Android 在任意系统上都能构建。
 
 ```bash
 git clone --recursive https://github.com/yanjinbin/FlClash-SSID.git
 cd FlClash-SSID
 flutter pub get
-dart setup.dart android   # 或 windows、macos、linux
+dart run tool/package.dart android   # 或 windows、macos、linux
 ```
 
 安装包输出到 `dist/`。Go 内核和 Rust 库会在 Flutter 构建过程中一并编译。
@@ -124,7 +117,7 @@ dart setup.dart android   # 或 windows、macos、linux
 | macOS | Xcode 与 Node.js。脚本会通过 npm 安装 `appdmg`。 |
 | Linux | Debian 或 Ubuntu。脚本会用 apt 安装构建所需的软件包，并下载 `appimagetool`。 |
 
-其余选项可以运行 `dart setup.dart --help` 查看，例如用 `--targets` 只构建部分安装包格式。
+其余选项可以运行 `dart run tool/package.dart --help` 查看，例如用 `--targets` 只构建部分安装包格式，用 `--dry-run` 列出这次会生成的文件。
 
 ## 支持
 
