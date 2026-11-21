@@ -753,9 +753,21 @@ jobs:
       - name: Download packages
         uses: actions/download-artifact@v4
         with:
-          path: ./dist
+          path: ./artifacts
           pattern: artifact-*
-          merge-multiple: true
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: ${{ env.BRANCH_CACHE }}
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Merge the build manifests
+        run: dart tool/package.dart merge artifacts/* --out dist
 
       - name: Publish fork release
         env:
