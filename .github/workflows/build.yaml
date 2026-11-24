@@ -750,6 +750,11 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
       - name: Download packages
         uses: actions/download-artifact@v4
         with:
