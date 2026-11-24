@@ -123,7 +123,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
 /// Four columns fill the window, the tables taking what the rows above them
 /// leave. A window too short for the tables, and every two column one, gets
 /// the summary cards instead, so no list scrolls inside a page that scrolls.
-class _DesktopDashboard extends StatelessWidget {
+class _DesktopDashboard extends ConsumerWidget {
   const _DesktopDashboard({
     required this.platform,
     required this.columns,
@@ -135,10 +135,14 @@ class _DesktopDashboard extends StatelessWidget {
   final double gap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final density = DashboardDensityScope.of(context);
     final compact = density.isCompact;
     final scale = DashboardDensityScope.scaleOf(context);
+    final wifiHeight = wifiModeCardHeight(
+      ref.watch(wifiModeSettingProvider.select((state) => state.rules.length)),
+      scale,
+    );
     final base = EdgeInsetsDirectional.fromSTEB(
       16,
       context.contentTopPadding,
@@ -217,6 +221,7 @@ class _DesktopDashboard extends StatelessWidget {
                   middleHeight,
                   row(const [(1, ServiceStatusCard()), (1, MemoryInfo())]),
                 ),
+                sized(wifiHeight, const RepaintBoundary(child: WifiModeCard())),
                 sized(summaryHeight, summaries),
               ],
             ),
@@ -249,13 +254,15 @@ class _DesktopDashboard extends StatelessWidget {
               (1, const MemoryInfo()),
             ]),
           ),
+          sized(wifiHeight, const RepaintBoundary(child: WifiModeCard())),
         ];
         final rowsHeight =
             padding.vertical +
             topHeight +
             controlHeight +
             middleHeight +
-            gap * 3;
+            wifiHeight +
+            gap * 4;
         final tablesFit = constraints.maxHeight >= rowsHeight + tablesHeight;
         final fills = constraints.maxHeight >= rowsHeight + summaryHeight;
         return SingleChildScrollView(
