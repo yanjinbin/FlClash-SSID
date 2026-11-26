@@ -196,6 +196,22 @@ class AppLocalizationsJa extends AppLocalizations {
   String get autoCheckUpdate => '更新の自動チェック';
 
   @override
+  String get disableUpdateCheck => '更新の確認を禁止';
+
+  @override
+  String get disableUpdateCheckDesc =>
+      '新しいバージョンの確認・通知・提供を行いません。「概要」画面の手動確認も含みます。';
+
+  @override
+  String get skipThisVersion => 'このバージョンをスキップ';
+
+  @override
+  String get skippedVersion => 'スキップしたバージョン';
+
+  @override
+  String get resumeUpdateReminder => '通知を再開';
+
+  @override
   String get checkCertificate => 'TLS証明書を検証';
 
   @override

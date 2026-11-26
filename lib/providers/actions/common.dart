@@ -91,7 +91,8 @@ class CommonAction extends _$CommonAction {
   }
 
   Future<bool> autoCheckUpdate() async {
-    if (!ref.read(appSettingProvider).autoCheckUpdate) return false;
+    final setting = ref.read(appSettingProvider);
+    if (!setting.autoCheckUpdate || setting.disableUpdateCheck) return false;
     final Map<String, dynamic>? res;
     try {
       res = await request.checkForUpdate();
@@ -155,8 +156,11 @@ class CommonAction extends _$CommonAction {
     bool isUser = false,
   }) async {
     if (data != null) {
-      final context = globalState.navigatorKey.currentContext!;
       final tag = data['tag_name'] as String;
+      if (!isUser && tag == ref.read(appSettingProvider).skippedUpdateVersion) {
+        return;
+      }
+      final context = globalState.navigatorKey.currentContext!;
       final asset = selfUpdateAsset;
       final res = await dialogs.showMessage(
         title: currentAppLocalizations.discoverNewVersion,
@@ -164,7 +168,7 @@ class CommonAction extends _$CommonAction {
         confirmText: asset == null
             ? currentAppLocalizations.goDownload
             : currentAppLocalizations.update,
-        cancelText: isUser ? null : currentAppLocalizations.noLongerRemind,
+        cancelText: currentAppLocalizations.skipThisVersion,
       );
       if (res == true) {
         if (asset == null) {
@@ -172,10 +176,10 @@ class CommonAction extends _$CommonAction {
         } else {
           unawaited(_downloadUpdate(tag, updateAssetName(tag, asset)));
         }
-      } else if (!isUser && res == false) {
+      } else if (res == false) {
         ref
             .read(appSettingProvider.notifier)
-            .update((state) => state.copyWith(autoCheckUpdate: false));
+            .update((state) => state.copyWith(skippedUpdateVersion: tag));
       }
     } else if (isUser) {
       unawaited(

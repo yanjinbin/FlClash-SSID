@@ -196,6 +196,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get autoCheckUpdate => 'Auto check for updates';
 
   @override
+  String get disableUpdateCheck => 'Disable update checks';
+
+  @override
+  String get disableUpdateCheckDesc =>
+      'No new version is checked, reminded or offered, including the check in About.';
+
+  @override
+  String get skipThisVersion => 'Skip this version';
+
+  @override
+  String get skippedVersion => 'Skipped version';
+
+  @override
+  String get resumeUpdateReminder => 'Resume reminders';
+
+  @override
   String get checkCertificate => 'Verify TLS certificates';
 
   @override

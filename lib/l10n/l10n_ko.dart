@@ -196,6 +196,22 @@ class AppLocalizationsKo extends AppLocalizations {
   String get autoCheckUpdate => '업데이트 자동 확인';
 
   @override
+  String get disableUpdateCheck => '업데이트 확인 금지';
+
+  @override
+  String get disableUpdateCheckDesc =>
+      '새 버전을 확인하거나 알리거나 제공하지 않습니다. \'정보\' 화면의 수동 확인도 포함됩니다.';
+
+  @override
+  String get skipThisVersion => '이 버전 건너뛰기';
+
+  @override
+  String get skippedVersion => '건너뛴 버전';
+
+  @override
+  String get resumeUpdateReminder => '알림 다시 시작';
+
+  @override
   String get checkCertificate => 'TLS 인증서 검증';
 
   @override

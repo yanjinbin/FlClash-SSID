@@ -108,21 +108,34 @@ class Request {
   /// Null when this build is current; throws when GitHub cannot be asked.
   Future<Map<String, dynamic>?> checkForUpdate() async {
     final release = await latestRelease();
-    final remoteVersion = release['tag_name'] as String;
-    final version = globalState.packageInfo.version;
-    final hasUpdate =
-        compareVersions(remoteVersion.replaceAll('v', ''), version) > 0;
+    final remoteVersion = appVersionOfTag(release['tag_name'] as String);
+    final info = globalState.packageInfo;
+    final build = int.tryParse(info.buildNumber);
+    final installedVersion = build == null
+        ? info.version
+        : '${info.version}+$build';
+    final hasUpdate = compareVersions(remoteVersion, installedVersion) > 0;
     return hasUpdate ? release : null;
   }
 
-  /// The release page redirect still answers once the hourly API quota is spent.
   Future<Map<String, dynamic>> latestRelease() async {
     try {
-      final response = await dio.get<Map<String, dynamic>>(
-        'https://api.github.com/repos/$repository/releases/latest',
+      final response = await dio.get<List<dynamic>>(
+        'https://api.github.com/repos/$repository/releases',
+        queryParameters: {'per_page': 30},
         options: Options(responseType: ResponseType.json),
       );
-      return response.data!;
+      final releases = [
+        for (final release in response.data ?? const [])
+          if (release is Map<String, dynamic> && release['draft'] != true)
+            release,
+      ];
+      if (releases.isNotEmpty) {
+        return releases.reduce(
+          (newest, release) =>
+              _isNewerRelease(release, newest) ? release : newest,
+        );
+      }
     } on DioException catch (error) {
       commonPrint.log(
         'latest release API failed: ${compactError(error)}',
@@ -143,6 +156,21 @@ class Request {
       throw FormatException('No release tag in the redirect', location);
     }
     return {'tag_name': segments[tagIndex]};
+  }
+
+  bool _isNewerRelease(
+    Map<String, dynamic> release,
+    Map<String, dynamic> newest,
+  ) {
+    try {
+      return compareVersions(
+            appVersionOfTag(release['tag_name'] as String),
+            appVersionOfTag(newest['tag_name'] as String),
+          ) >
+          0;
+    } on FormatException {
+      return false;
+    }
   }
 
   Future<String> downloadVerifiedRelease({

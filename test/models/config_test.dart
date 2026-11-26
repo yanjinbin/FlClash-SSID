@@ -261,7 +261,7 @@ void main() {
         DashboardWidget.currentOutbound,
         DashboardWidget.profiles,
         DashboardWidget.connectionStats,
-        DashboardWidget.networkTakeover,
+        DashboardWidget.tun,
         DashboardWidget.vpnButton,
       ]);
     });
@@ -1208,8 +1208,15 @@ void main() {
       expect(props.hideIp, true);
     });
 
-    test('shows every dashboard card by default', () {
-      expect(defaultDashboardWidgets, unorderedEquals(DashboardWidget.values));
+    test('shows every dashboard card but the system proxy by default', () {
+      expect(
+        defaultDashboardWidgets,
+        unorderedEquals(
+          DashboardWidget.values.where(
+            (widget) => widget != DashboardWidget.systemProxy,
+          ),
+        ),
+      );
       expect(
         Config.realFromJson(null).appSettingProps.dashboardWidgets,
         defaultDashboardWidgets,

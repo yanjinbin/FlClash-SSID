@@ -116,6 +116,12 @@ void main() {
     expect(releaseVersionOfTag('v0.9.4-rs.1+2'), '0.9.4-rs.1.2');
   });
 
+  test('a fork tag names its files by the plain version', () {
+    expect(releaseVersionOfTag('ssid-0.9.4-2026112401'), '0.9.4');
+    expect(appVersionOfTag('ssid-0.9.4-2026112401'), '0.9.4+2026112401');
+    expect(appVersionOfTag('v0.9.4'), '0.9.4');
+  });
+
   test('an rs version starts its prerelease with rs', () {
     expect(isRsReleaseVersion('0.9.4-rs.1.2'), isTrue);
     expect(isRsReleaseVersion('0.9.4'), isFalse);

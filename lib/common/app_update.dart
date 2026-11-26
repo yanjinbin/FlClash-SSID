@@ -45,9 +45,7 @@ SelfUpdateAsset? get selfUpdateAsset => resolveSelfUpdateAsset();
 Future<bool> Function(Uri uri) launchReleasePage = launchUrl;
 
 Future<bool> openReleasePage() {
-  return launchReleasePage(
-    Uri.https('github.com', '/$repository/releases/latest'),
-  );
+  return launchReleasePage(Uri.https('github.com', '/$repository/releases'));
 }
 
 Uri releaseAssetUri(String tag, String name) {

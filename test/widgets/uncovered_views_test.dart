@@ -302,7 +302,9 @@ void main() {
 
     adapter.response.complete(
       ResponseBody.fromString(
-        jsonEncode({'tag_name': 'v0.0.0'}),
+        jsonEncode([
+          {'tag_name': 'v0.0.0', 'draft': false},
+        ]),
         200,
         headers: {
           Headers.contentTypeHeader: [Headers.jsonContentType],

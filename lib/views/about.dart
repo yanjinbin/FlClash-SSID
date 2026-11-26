@@ -27,6 +27,7 @@ class AboutView extends ConsumerWidget {
 
   Future<void> _checkUpdate(BuildContext context, WidgetRef ref) async {
     if (ref.read(loadingProvider(LoadingTag.checkUpdate))) return;
+    if (ref.read(appSettingProvider).disableUpdateCheck) return;
     final commonAction = ref.read(commonActionProvider.notifier);
     final result = await globalState.loadingRun(
       () async => (release: await request.checkForUpdate()),
@@ -60,6 +61,9 @@ class AboutView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appLocalizations = context.appLocalizations;
     final isLoading = ref.watch(loadingProvider(LoadingTag.checkUpdate));
+    final updateCheckDisabled = ref.watch(
+      appSettingProvider.select((state) => state.disableUpdateCheck),
+    );
     return Scaffold(
       isLoading: isLoading,
       title: appLocalizations.about,
@@ -71,6 +75,7 @@ class AboutView extends ConsumerWidget {
         children: [
           _AboutHero(
             isCheckingUpdate: isLoading,
+            canCheckUpdate: !updateCheckDisabled,
             onCheckUpdate: () {
               _checkUpdate(context, ref);
             },
@@ -141,11 +146,13 @@ class AboutView extends ConsumerWidget {
 
 class _AboutHero extends StatelessWidget {
   final bool isCheckingUpdate;
+  final bool canCheckUpdate;
   final VoidCallback onCheckUpdate;
   final VoidCallback onEnterDeveloperMode;
 
   const _AboutHero({
     required this.isCheckingUpdate,
+    required this.canCheckUpdate,
     required this.onCheckUpdate,
     required this.onEnterDeveloperMode,
   });
@@ -217,7 +224,9 @@ class _AboutHero extends StatelessWidget {
             size: TonalButtonSize.bar,
             glyph: AppGlyphs.sync,
             label: appLocalizations.checkUpdate,
-            onPressed: isCheckingUpdate ? null : onCheckUpdate,
+            onPressed: isCheckingUpdate || !canCheckUpdate
+                ? null
+                : onCheckUpdate,
           ),
         ],
       ),

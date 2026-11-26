@@ -195,6 +195,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get autoCheckUpdate => '自动检查更新';
 
   @override
+  String get disableUpdateCheck => '禁止检查更新';
+
+  @override
+  String get disableUpdateCheckDesc => '不再检查、提醒或提供新版本，包括“关于”页的手动检查。';
+
+  @override
+  String get skipThisVersion => '跳过此版本';
+
+  @override
+  String get skippedVersion => '已跳过的版本';
+
+  @override
+  String get resumeUpdateReminder => '恢复提醒';
+
+  @override
   String get checkCertificate => '校验 TLS 证书';
 
   @override

@@ -57,14 +57,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
   @override
   Widget build(BuildContext context) {
     final platform = widget.platform ?? SupportPlatform.currentPlatform;
-    final viewSize = ref.watch(viewSizeProvider);
-    final sideWidth = ref.watch(sideWidthProvider);
     final scale = math.max(1.0, MediaQuery.textScalerOf(context).scale(1));
-    final size = Size(viewSize.width - sideWidth, viewSize.height) / scale;
-    final editable = !DashboardDensity.of(size).isDesktop;
-    if (!editable) {
-      _editing = false;
-    }
     final editing = _editing;
     final gap = cardSpacingOf(context, ref.watch(viewModeProvider));
     final appLocalizations = context.appLocalizations;
@@ -75,7 +68,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
           : appLocalizations.dashboard,
       actions: [
         if (!editing) const LiveStatusButton(),
-        if (editable && !editing)
+        if (!editing)
           AppBarActionButton(
             data: IconButtonData(
               glyph: AppGlyphs.edit,
@@ -104,6 +97,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                     platform: platform,
                     columns: dashboardColumnsOf(room.width),
                     gap: gap,
+                    editing: editing,
                   )
                 : _MobileDashboard(
                     controller: _controller,
@@ -123,22 +117,54 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
 /// Four columns fill the window, the tables taking what the rows above them
 /// leave. A window too short for the tables, and every two column one, gets
 /// the summary cards instead, so no list scrolls inside a page that scrolls.
+///
+/// The saved cards decide what these rows hold; a card the editor hides lets
+/// the rest of its row grow.
 class _DesktopDashboard extends ConsumerWidget {
   const _DesktopDashboard({
     required this.platform,
     required this.columns,
     required this.gap,
+    required this.editing,
   });
 
   final SupportPlatform platform;
   final int columns;
   final double gap;
+  final bool editing;
+
+  void _remove(WidgetRef ref, DashboardWidget widget) {
+    ref
+        .read(appSettingProvider.notifier)
+        .update(
+          (state) => state.copyWith(
+            dashboardWidgets: [...state.dashboardWidgets]..remove(widget),
+          ),
+        );
+  }
+
+  void _add(WidgetRef ref, DashboardWidget widget) {
+    ref.read(appSettingProvider.notifier).update((state) {
+      if (state.dashboardWidgets.contains(widget)) return state;
+      return state.copyWith(
+        dashboardWidgets: [...state.dashboardWidgets, widget],
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final density = DashboardDensityScope.of(context);
     final compact = density.isCompact;
     final scale = DashboardDensityScope.scaleOf(context);
+    final saved = ref.watch(
+      dashboardStateProvider.select((state) => state.dashboardWidgets),
+    );
+    final shown = {
+      for (final widget in saved)
+        if (widget.platforms.contains(platform)) widget,
+      DashboardWidget.currentOutbound,
+    };
     final wifiHeight = wifiModeCardHeight(
       ref.watch(wifiModeSettingProvider.select((state) => state.rules.length)),
       scale,
@@ -154,6 +180,43 @@ class _DesktopDashboard extends ConsumerWidget {
     final middleHeight = (compact ? 152 : 176) * scale;
     final tablesHeight = connectionsTableMinHeight(density, scale);
     final summaryHeight = (compact ? 112 : 120) * scale;
+    final top = [
+      for (final widget in const [
+        DashboardWidget.currentOutbound,
+        DashboardWidget.networkSpeed,
+      ])
+        if (shown.contains(widget)) widget,
+    ];
+    final control = [
+      for (final widget in const [
+        DashboardWidget.outboundMode,
+        DashboardWidget.systemProxy,
+        DashboardWidget.tun,
+        DashboardWidget.vpnButton,
+      ])
+        if (shown.contains(widget)) widget,
+    ];
+    final middle = [
+      for (final widget in const [
+        DashboardWidget.intranetIp,
+        DashboardWidget.profiles,
+        DashboardWidget.serviceStatus,
+        DashboardWidget.memoryInfo,
+      ])
+        if (shown.contains(widget)) widget,
+    ];
+    final bottom = [
+      for (final widget in const [
+        DashboardWidget.connectionStats,
+        DashboardWidget.proxyGroups,
+      ])
+        if (shown.contains(widget)) widget,
+    ];
+    final addable = [
+      for (final widget in DashboardWidget.values)
+        if (widget.platforms.contains(platform) && !shown.contains(widget))
+          widget,
+    ];
     return LayoutBuilder(
       builder: (context, constraints) {
         final room =
@@ -164,107 +227,190 @@ class _DesktopDashboard extends ConsumerWidget {
           start: base.start + inset,
           end: base.end + inset,
         );
-        double span(int columns) => column * columns + gap * (columns - 1);
-        Widget row(List<(int, Widget)> cards) => Row(
+        final serviceColumns = column >= _servicePairColumnMin * scale ? 2 : 1;
+        double span(int count) => column * count + gap * (count - 1);
+
+        Widget barrier(Widget child) =>
+            editing ? AbsorbPointer(child: child) : child;
+
+        Widget removable(DashboardWidget widget, Widget child) {
+          if (!editing || !widget.removable) {
+            return barrier(child);
+          }
+          return Stack(
+            fit: StackFit.passthrough,
+            children: [
+              barrier(child),
+              PositionedDirectional(
+                top: 0,
+                end: 0,
+                child: DashboardRemoveButton(
+                  label: widget.label(context),
+                  onPressed: () => _remove(ref, widget),
+                ),
+              ),
+            ],
+          );
+        }
+
+        (int, Widget) cellOf(DashboardWidget widget) => switch (widget) {
+          DashboardWidget.currentOutbound => (2, const CurrentOutboundCard()),
+          DashboardWidget.networkSpeed => (
+            2,
+            Row(
+              spacing: gap,
+              children: const [
+                Expanded(child: SpeedCard(direction: TrafficDirection.upload)),
+                Expanded(
+                  child: SpeedCard(direction: TrafficDirection.download),
+                ),
+              ],
+            ),
+          ),
+          DashboardWidget.outboundMode => (2, const OutboundModeBar()),
+          DashboardWidget.vpnButton => (2, const VpnTile()),
+          DashboardWidget.systemProxy => (
+            1,
+            const NetworkTakeoverTile(TakeoverSwitch.systemProxy),
+          ),
+          DashboardWidget.tun => (
+            1,
+            const NetworkTakeoverTile(TakeoverSwitch.tun),
+          ),
+          DashboardWidget.intranetIp => (1, const IntranetIpCard()),
+          DashboardWidget.profiles => (1, const ProfilesCard()),
+          DashboardWidget.serviceStatus => (
+            1,
+            ServiceStatusCard(columns: serviceColumns),
+          ),
+          DashboardWidget.memoryInfo => (1, const MemoryInfo()),
+          DashboardWidget.wifiMode ||
+          DashboardWidget.connectionStats ||
+          DashboardWidget.proxyGroups => throw ArgumentError.value(
+            widget,
+            'widget',
+            'takes a row of its own',
+          ),
+        };
+
+        void packRows(
+          double height,
+          List<DashboardWidget> widgets,
+          List<double> heights,
+          List<Widget> into,
+        ) {
+          var cells = <(int, Widget)>[];
+          var used = 0;
+          void flush() {
+            if (cells.isEmpty) return;
+            into.add(
+              SizedBox(
+                height: height,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: gap,
+                  children: [
+                    for (var index = 0; index < cells.length; index++)
+                      if (index == cells.length - 1 && used < columns)
+                        Expanded(child: RepaintBoundary(child: cells[index].$2))
+                      else
+                        SizedBox(
+                          width: span(cells[index].$1),
+                          child: RepaintBoundary(child: cells[index].$2),
+                        ),
+                  ],
+                ),
+              ),
+            );
+            heights.add(height);
+            cells = [];
+            used = 0;
+          }
+
+          for (final widget in widgets) {
+            final (flex, child) = cellOf(widget);
+            if (used + flex > columns && cells.isNotEmpty) {
+              flush();
+            }
+            cells.add((flex, removable(widget, child)));
+            used += flex;
+          }
+          flush();
+        }
+
+        Widget bottomCard(
+          DashboardWidget widget, {
+          required bool table,
+        }) => switch (widget) {
+          DashboardWidget.connectionStats =>
+            table ? const ConnectionsTableCard() : const ConnectionStatsCard(),
+          DashboardWidget.proxyGroups =>
+            table ? const ProxyGroupsCard() : const ProxyGroupsSummaryCard(),
+          _ => throw ArgumentError.value(widget, 'widget', 'is not a summary'),
+        };
+
+        final rowHeights = <double>[];
+        final rows = <Widget>[];
+        packRows(topHeight, top, rowHeights, rows);
+        packRows(controlHeight, control, rowHeights, rows);
+        packRows(middleHeight, middle, rowHeights, rows);
+        if (shown.contains(DashboardWidget.wifiMode)) {
+          rows.add(
+            SizedBox(
+              height: wifiHeight,
+              child: RepaintBoundary(
+                child: removable(
+                  DashboardWidget.wifiMode,
+                  const WifiModeCard(),
+                ),
+              ),
+            ),
+          );
+          rowHeights.add(wifiHeight);
+        }
+
+        Widget bottomRow({required bool table}) => Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: gap,
           children: [
-            for (final (columns, card) in cards)
-              SizedBox(
-                width: span(columns),
-                child: RepaintBoundary(child: card),
+            for (final widget in bottom)
+              Expanded(
+                flex: !table
+                    ? 1
+                    : widget == DashboardWidget.connectionStats
+                    ? 3
+                    : 2,
+                child: RepaintBoundary(
+                  child: removable(widget, bottomCard(widget, table: table)),
+                ),
               ),
           ],
         );
-        Widget sized(double height, Widget child) =>
-            SizedBox(height: height, child: child);
-        final switches =
-            DashboardWidget.networkTakeover.platforms.contains(platform)
-            ? const [
-                (1, NetworkTakeoverTile(TakeoverSwitch.systemProxy)),
-                (1, NetworkTakeoverTile(TakeoverSwitch.tun)),
-              ]
-            : const [(2, VpnTile())];
-        final half = columns ~/ 2;
-        final summaries = row([
-          (half, const ConnectionStatsCard()),
-          (half, const ProxyGroupsSummaryCard()),
-        ]);
-        if (columns == 2) {
-          return SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: padding,
-            child: Column(
-              spacing: gap,
-              children: [
-                sized(
-                  topHeight,
-                  const RepaintBoundary(child: CurrentOutboundCard()),
-                ),
-                sized(
-                  topHeight,
-                  row(const [
-                    (1, SpeedCard(direction: TrafficDirection.upload)),
-                    (1, SpeedCard(direction: TrafficDirection.download)),
-                  ]),
-                ),
-                sized(
-                  controlHeight,
-                  const RepaintBoundary(child: OutboundModeBar()),
-                ),
-                sized(controlHeight, row(switches)),
-                sized(
-                  middleHeight,
-                  row(const [(1, IntranetIpCard()), (1, ProfilesCard())]),
-                ),
-                sized(
-                  middleHeight,
-                  row(const [(1, ServiceStatusCard()), (1, MemoryInfo())]),
-                ),
-                sized(wifiHeight, const RepaintBoundary(child: WifiModeCard())),
-                sized(summaryHeight, summaries),
-              ],
-            ),
-          );
-        }
-        final rows = [
-          sized(
-            topHeight,
-            row(const [
-              (2, CurrentOutboundCard()),
-              (1, SpeedCard(direction: TrafficDirection.upload)),
-              (1, SpeedCard(direction: TrafficDirection.download)),
-            ]),
-          ),
-          sized(
-            controlHeight,
-            row([(2, const OutboundModeBar()), ...switches]),
-          ),
-          sized(
-            middleHeight,
-            row([
-              (1, const IntranetIpCard()),
-              (1, const ProfilesCard()),
-              (
-                1,
-                ServiceStatusCard(
-                  columns: column >= _servicePairColumnMin * scale ? 2 : 1,
-                ),
-              ),
-              (1, const MemoryInfo()),
-            ]),
-          ),
-          sized(wifiHeight, const RepaintBoundary(child: WifiModeCard())),
-        ];
         final rowsHeight =
             padding.vertical +
-            topHeight +
-            controlHeight +
-            middleHeight +
-            wifiHeight +
-            gap * 4;
-        final tablesFit = constraints.maxHeight >= rowsHeight + tablesHeight;
-        final fills = constraints.maxHeight >= rowsHeight + summaryHeight;
+            rowHeights.fold(0.0, (sum, height) => sum + height) +
+            gap * (rows.length - 1);
+        final canFill = !(editing && addable.isNotEmpty);
+        final tablesFit =
+            columns == 4 &&
+            bottom.isNotEmpty &&
+            constraints.maxHeight >= rowsHeight + gap + tablesHeight;
+        final fills =
+            canFill &&
+            constraints.maxHeight >=
+                rowsHeight + gap + (bottom.isEmpty ? 0 : summaryHeight);
+        final Widget? bottomWidget = bottom.isEmpty
+            ? null
+            : tablesFit
+            ? canFill
+                  ? Expanded(child: bottomRow(table: true))
+                  : SizedBox(
+                      height: tablesHeight,
+                      child: bottomRow(table: true),
+                    )
+            : fills
+            ? Expanded(child: bottomRow(table: false))
+            : SizedBox(height: summaryHeight, child: bottomRow(table: false));
         return SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: SizedBox(
@@ -275,29 +421,20 @@ class _DesktopDashboard extends ConsumerWidget {
                 spacing: gap,
                 children: [
                   ...rows,
-                  if (tablesFit)
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        spacing: gap,
-                        children: const [
-                          Expanded(
-                            flex: 3,
-                            child: RepaintBoundary(
-                              child: ConnectionsTableCard(),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: RepaintBoundary(child: ProxyGroupsCard()),
-                          ),
-                        ],
+                  ?bottomWidget,
+                  if (editing && addable.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    DashboardSectionLabel(
+                      context.appLocalizations.dashboardAddableSection,
+                    ),
+                    for (final widget in addable) ...[
+                      DashboardAddRow(
+                        item: widget,
+                        onAdd: () => _add(ref, widget),
                       ),
-                    )
-                  else if (fills)
-                    Expanded(child: summaries)
-                  else
-                    sized(summaryHeight, summaries),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
                 ],
               ),
             ),

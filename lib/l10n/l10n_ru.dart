@@ -198,6 +198,22 @@ class AppLocalizationsRu extends AppLocalizations {
   String get autoCheckUpdate => 'Автопроверка обновлений';
 
   @override
+  String get disableUpdateCheck => 'Запретить проверку обновлений';
+
+  @override
+  String get disableUpdateCheckDesc =>
+      'Новые версии не проверяются и не предлагаются, включая ручную проверку в разделе «О программе».';
+
+  @override
+  String get skipThisVersion => 'Пропустить эту версию';
+
+  @override
+  String get skippedVersion => 'Пропущенная версия';
+
+  @override
+  String get resumeUpdateReminder => 'Возобновить напоминания';
+
+  @override
   String get checkCertificate => 'Проверять TLS-сертификаты';
 
   @override

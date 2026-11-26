@@ -12,11 +12,29 @@ enum ReleaseArch { amd64, arm64, armv7, universal }
 
 enum ReleaseForm { setup, portable }
 
+/// A fork build tags its release with the line and the build, such as
+/// `ssid-0.9.4-2026112401`, while its files are named for the plain version.
+final _forkTag = RegExp(r'^ssid-(\d+\.\d+\.\d+)-(\d+)$');
+
 /// GitHub rewrites `+` in asset names, so a rebuild tag such as
 /// `v0.9.4-rs.1+2` names its files `0.9.4-rs.1.2`.
 String releaseVersionOfTag(String tag) {
+  final fork = _forkTag.firstMatch(tag);
+  if (fork != null) {
+    return fork.group(1)!;
+  }
   final version = tag.startsWith('v') ? tag.substring(1) : tag;
   return version.replaceAll('+', '.');
+}
+
+/// The version a tag stands for, build included, for comparison with the
+/// installed one: the fork tag above stands for `0.9.4+2026112401`.
+String appVersionOfTag(String tag) {
+  final fork = _forkTag.firstMatch(tag);
+  if (fork != null) {
+    return '${fork.group(1)}+${fork.group(2)}';
+  }
+  return tag.startsWith('v') ? tag.substring(1) : tag;
 }
 
 /// File names carry no line, so an rs version says so in its first
