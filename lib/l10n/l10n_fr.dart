@@ -197,6 +197,22 @@ class AppLocalizationsFr extends AppLocalizations {
   String get autoCheckUpdate => 'Rechercher les mises à jour automatiquement';
 
   @override
+  String get disableUpdateCheck => 'Désactiver la recherche de mises à jour';
+
+  @override
+  String get disableUpdateCheckDesc =>
+      'Aucune nouvelle version n\'est recherchée, signalée ou proposée, y compris la vérification manuelle dans « À propos ».';
+
+  @override
+  String get skipThisVersion => 'Ignorer cette version';
+
+  @override
+  String get skippedVersion => 'Version ignorée';
+
+  @override
+  String get resumeUpdateReminder => 'Reprendre les rappels';
+
+  @override
   String get checkCertificate => 'Vérifier les certificats TLS';
 
   @override

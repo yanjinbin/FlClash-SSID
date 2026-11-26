@@ -102,8 +102,7 @@ void main() {
     final current = rectOf(tester, CurrentOutboundCard);
     final upload = rectOf(tester, SpeedCard);
     final mode = rectOf(tester, OutboundModeBar);
-    final systemProxy = tester.getRect(find.byType(NetworkTakeoverTile).first);
-    final tun = tester.getRect(find.byType(NetworkTakeoverTile).last);
+    final tun = tester.getRect(find.byType(NetworkTakeoverTile));
     final intranet = rectOf(tester, IntranetIpCard);
     final profile = rectOf(tester, ProfilesCard);
     final service = rectOf(tester, ServiceStatusCard);
@@ -117,8 +116,8 @@ void main() {
     expect(mode.top, current.bottom + 16);
     expect(mode.height, 64);
     expect(mode.width, closeTo(current.width, 0.01));
-    expect(systemProxy.left, closeTo(upload.left, 0.01));
-    expect(tun.right, closeTo(upload.right + 16 + upload.width, 0.01));
+    expect(tun.left, closeTo(upload.left, 0.01));
+    expect(tun.width, closeTo(current.width, 0.01));
     expect(intranet.top, mode.bottom + 16);
     expect(intranet.height, 176);
     expect(profile.top, intranet.top);
@@ -375,7 +374,7 @@ void main() {
     expect(current.width, 800 - 16 - 24);
     expect(current.width, closeTo(upload.width * 2 + gap, 0.01));
     expect(mode.width, current.width);
-    expect(tun.width, closeTo(upload.width, 0.01));
+    expect(tun.width, current.width);
     expect(intranet.top, tun.bottom + gap);
     expect(profile.top, intranet.top);
     expect(profile.left, closeTo(intranet.right + gap, 0.01));
@@ -427,13 +426,14 @@ void main() {
   });
 
   testWidgets('a narrow desktop window shows the phone cards in a centred '
-      'column, takeover in place of the VPN', (tester) async {
+      'column, the TUN switch in place of the VPN', (tester) async {
     await pumpDashboard(tester, const Size(620, 700));
 
     final card = rectOf(tester, CurrentOutboundCard);
     expect(card.width, 560);
     expect(card.center.dx, closeTo(310, 0.01));
-    expect(find.byType(NetworkTakeoverCard), findsOneWidget);
+    expect(find.byType(TunCard), findsOneWidget);
+    expect(find.byType(SystemProxyCard), findsNothing);
     expect(find.byType(VpnCard), findsNothing);
     expect(find.byType(OutboundModeCard), findsOneWidget);
     expect(find.byType(OutboundModeBar), findsNothing);
@@ -452,7 +452,7 @@ void main() {
     expect(card.left, 16);
     expect(card.right, 400 - 16);
     expect(find.byType(VpnCard), findsOneWidget);
-    expect(find.byType(NetworkTakeoverCard), findsNothing);
+    expect(find.byType(TunCard), findsNothing);
 
     await teardown(tester);
   });

@@ -168,5 +168,20 @@ void main() {
         completion(isFalse),
       );
     });
+
+    test(
+      'returns without a network call when update checks are disabled',
+      () async {
+        final container = buildContainer();
+        container
+            .read(appSettingProvider.notifier)
+            .update((state) => state.copyWith(disableUpdateCheck: true));
+
+        await expectLater(
+          container.read(commonActionProvider.notifier).autoCheckUpdate(),
+          completion(isFalse),
+        );
+      },
+    );
   });
 }

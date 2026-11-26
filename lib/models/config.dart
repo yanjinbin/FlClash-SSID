@@ -132,7 +132,7 @@ const List<DashboardWidget> defaultDashboardWidgets = [
   DashboardWidget.networkSpeed,
   DashboardWidget.outboundMode,
   DashboardWidget.vpnButton,
-  DashboardWidget.networkTakeover,
+  DashboardWidget.tun,
   DashboardWidget.wifiMode,
   DashboardWidget.intranetIp,
   DashboardWidget.serviceStatus,
@@ -142,8 +142,6 @@ const List<DashboardWidget> defaultDashboardWidgets = [
   DashboardWidget.memoryInfo,
 ];
 
-/// Every platform starts with every card; the dashboard drops the ones it
-/// lacks, and the editor lets the user hide the rest.
 const List<DashboardWidget> platformDefaultDashboardWidgets =
     defaultDashboardWidgets;
 
@@ -162,15 +160,35 @@ const _legacyDefaultDashboardWidgets = {
 const _legacyDashboardWidgets = {
   'networkDetection': DashboardWidget.intranetIp,
   'outboundModeV2': DashboardWidget.outboundMode,
-  'systemProxyButton': DashboardWidget.networkTakeover,
-  'tunButton': DashboardWidget.networkTakeover,
-  'systemProxy': DashboardWidget.networkTakeover,
-  'tun': DashboardWidget.networkTakeover,
+  'systemProxyButton': DashboardWidget.systemProxy,
+  'systemProxy': DashboardWidget.systemProxy,
+  'tunButton': DashboardWidget.tun,
+  'tun': DashboardWidget.tun,
   'connections': DashboardWidget.connectionStats,
   'requests': DashboardWidget.connectionStats,
   'dnsQueries': DashboardWidget.connectionStats,
   'trafficUsage': DashboardWidget.networkSpeed,
 };
+
+/// The two switches shared one card, so a saved list may still name it.
+const _legacyTakeoverName = 'networkTakeover';
+
+Iterable<DashboardWidget> _savedWidgetsOf(
+  Iterable<dynamic> names,
+  Map<String, DashboardWidget> byName,
+) sync* {
+  for (final name in names) {
+    if (name == _legacyTakeoverName) {
+      yield DashboardWidget.systemProxy;
+      yield DashboardWidget.tun;
+      continue;
+    }
+    final widget = _legacyDashboardWidgets[name] ?? byName[name];
+    if (widget != null) {
+      yield widget;
+    }
+  }
+}
 
 const _retiredDashboardWidgets = {
   'runTime',
@@ -187,11 +205,7 @@ List<DashboardWidget> dashboardWidgetsFromJson(
   }
   final byName = DashboardWidget.values.asNameMap();
   if (dashboardWidgets.contains(DashboardWidget.currentOutbound.name)) {
-    return dashboardWidgets
-        .map((e) => _legacyDashboardWidgets[e] ?? byName[e])
-        .nonNulls
-        .toSet()
-        .toList();
+    return _savedWidgetsOf(dashboardWidgets, byName).toSet().toList();
   }
   final names = {
     for (final name in dashboardWidgets)
@@ -201,9 +215,7 @@ List<DashboardWidget> dashboardWidgetsFromJson(
       names.containsAll(_legacyDefaultDashboardWidgets)) {
     return platformDefaultDashboardWidgets;
   }
-  final kept = dashboardWidgets
-      .map((e) => _legacyDashboardWidgets[e] ?? byName[e])
-      .nonNulls;
+  final kept = _savedWidgetsOf(dashboardWidgets, byName).toList();
   if (kept.isEmpty &&
       !dashboardWidgets.every(_retiredDashboardWidgets.contains)) {
     return platformDefaultDashboardWidgets;
@@ -270,6 +282,8 @@ abstract class AppSettingProps with _$AppSettingProps {
     TabAnimation tabAnimation,
     @Default(true) bool floatingNavigationBar,
     @Default(true) bool autoCheckUpdate,
+    @Default(false) bool disableUpdateCheck,
+    String? skippedUpdateVersion,
     @Default(true)
     @JsonKey(readValue: _readSidebarExpanded)
     bool sidebarExpanded,

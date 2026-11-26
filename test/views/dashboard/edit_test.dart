@@ -113,7 +113,7 @@ void main() {
     expect(find.byTooltip('Add Memory info'), findsOneWidget);
     expect(find.byType(SortHandle), findsNothing);
     // The desktop-only card has no row on a phone.
-    expect(find.byTooltip('Add Traffic takeover'), findsNothing);
+    expect(find.byTooltip('Add TUN'), findsNothing);
     expect(tester.takeException(), isNull);
 
     await teardown(tester);
@@ -194,7 +194,7 @@ void main() {
   ) async {
     seed(const [
       DashboardWidget.currentOutbound,
-      DashboardWidget.networkTakeover,
+      DashboardWidget.tun,
       DashboardWidget.networkSpeed,
       DashboardWidget.profiles,
     ]);
@@ -205,7 +205,7 @@ void main() {
 
     expect(saved(), const [
       DashboardWidget.currentOutbound,
-      DashboardWidget.networkTakeover,
+      DashboardWidget.tun,
       DashboardWidget.profiles,
     ]);
 
@@ -381,7 +381,7 @@ void main() {
       'held and dragged with a mouse too', (tester) async {
     seed(const [
       DashboardWidget.currentOutbound,
-      DashboardWidget.networkTakeover,
+      DashboardWidget.tun,
       DashboardWidget.profiles,
     ]);
     await pumpEditor(
@@ -397,8 +397,7 @@ void main() {
     expect(tester.getCenter(current).dx, closeTo(310, 0.01));
 
     final card = find.byType(ProfilesCard);
-    final rise =
-        top(tester, card) - top(tester, find.byType(NetworkTakeoverCard)) - 10;
+    final rise = top(tester, card) - top(tester, find.byType(TunCard)) - 10;
     final gesture = await tester.startGesture(
       tester.getCenter(card),
       kind: PointerDeviceKind.mouse,
@@ -414,34 +413,40 @@ void main() {
     expect(saved(), const [
       DashboardWidget.currentOutbound,
       DashboardWidget.profiles,
-      DashboardWidget.networkTakeover,
+      DashboardWidget.tun,
     ]);
 
-    await tester.tap(find.byTooltip('Remove Traffic takeover'));
+    await tester.tap(find.byTooltip('Remove TUN'));
     await settle(tester);
 
-    expect(saved(), isNot(contains(DashboardWidget.networkTakeover)));
-    expect(find.byTooltip('Add Traffic takeover'), findsOneWidget);
+    expect(saved(), isNot(contains(DashboardWidget.tun)));
+    expect(find.byTooltip('Add TUN'), findsOneWidget);
 
     await teardown(tester);
   });
 
-  testWidgets('a landscape phone gets the fixed grid without an edit mode', (
+  testWidgets('a landscape phone edits the fixed grid in place', (
     tester,
   ) async {
     seed(const [DashboardWidget.currentOutbound, DashboardWidget.profiles]);
     await pumpDashboard(tester, size: const Size(915, 412));
 
-    expect(find.byTooltip('Edit dashboard'), findsNothing);
+    await edit(tester);
+
     expect(find.byType(DashboardEditor), findsNothing);
-    expect(find.byType(OutboundModeBar), findsOneWidget);
+    expect(find.byType(OutboundModeBar), findsNothing);
+    expect(find.byTooltip('Remove Profile'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Remove Profile'));
+    await settle(tester);
+
+    expect(saved(), const [DashboardWidget.currentOutbound]);
+    expect(find.byType(ProfilesCard), findsNothing);
 
     await teardown(tester);
   });
 
-  testWidgets('turning to the fixed grid ends editing for good', (
-    tester,
-  ) async {
+  testWidgets('turning to the fixed grid keeps editing', (tester) async {
     seed(const [DashboardWidget.currentOutbound, DashboardWidget.profiles]);
     await pumpEditor(tester);
     expect(find.byType(DashboardEditor), findsOneWidget);
@@ -454,24 +459,56 @@ void main() {
 
     await resize(const Size(915, 412));
     expect(find.byType(DashboardEditor), findsNothing);
+    expect(find.byTooltip('Remove Profile'), findsOneWidget);
+    expect(find.byTooltip('Done'), findsOneWidget);
+
     await resize(const Size(412, 1400));
-    expect(find.byType(DashboardEditor), findsNothing);
-    expect(find.byTooltip('Edit dashboard'), findsOneWidget);
+    expect(find.byType(DashboardEditor), findsOneWidget);
+    expect(find.byTooltip('Done'), findsOneWidget);
 
     await teardown(tester);
   });
 
-  testWidgets('the desktop grid keeps its fixed layout without an edit mode', (
+  testWidgets('the desktop grid removes and adds its cards in place', (
     tester,
   ) async {
+    seed(const [
+      DashboardWidget.currentOutbound,
+      DashboardWidget.tun,
+      DashboardWidget.profiles,
+    ]);
     await pumpDashboard(
       tester,
       platform: SupportPlatform.MacOS,
       size: const Size(1220, 900),
     );
 
-    expect(find.byTooltip('Edit dashboard'), findsNothing);
+    expect(find.byTooltip('Edit dashboard'), findsOneWidget);
+    await edit(tester);
+
     expect(find.byType(DashboardEditor), findsNothing);
+    expect(find.byTooltip('Remove Profile'), findsOneWidget);
+    expect(find.byTooltip('Add System proxy'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Remove Profile'));
+    await settle(tester);
+
+    expect(saved(), const [
+      DashboardWidget.currentOutbound,
+      DashboardWidget.tun,
+    ]);
+    expect(find.byType(ProfilesCard), findsNothing);
+
+    await tester.ensureVisible(find.byTooltip('Add System proxy'));
+    await tester.tap(find.byTooltip('Add System proxy'));
+    await settle(tester);
+
+    expect(saved(), contains(DashboardWidget.systemProxy));
+    expect(find.byType(NetworkTakeoverTile), findsNWidgets(2));
+
+    await tester.tap(find.byTooltip('Done'));
+    await tester.pump();
+    expect(find.byTooltip('Remove Profile'), findsNothing);
 
     await teardown(tester);
   });

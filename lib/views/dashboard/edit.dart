@@ -231,11 +231,16 @@ class _DashboardEditorState extends ConsumerState<DashboardEditor>
                 padding: const EdgeInsets.only(top: _addableTop),
                 sliver: SliverList.list(
                   children: [
-                    _SectionLabel(appLocalizations.dashboardAddableSection),
+                    DashboardSectionLabel(
+                      appLocalizations.dashboardAddableSection,
+                    ),
                     for (final card in addable)
                       Padding(
                         padding: const EdgeInsets.only(bottom: _rowGap),
-                        child: _AddRow(item: card, onAdd: () => _add(card)),
+                        child: DashboardAddRow(
+                          item: card,
+                          onAdd: () => _add(card),
+                        ),
                       ),
                   ],
                 ),
@@ -422,7 +427,6 @@ class _EditableCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = context.colorScheme;
     final card = AbsorbPointer(
       child: RepaintBoundary(key: cardKey, child: item.card),
     );
@@ -435,12 +439,8 @@ class _EditableCard extends StatelessWidget {
           PositionedDirectional(
             top: 0,
             end: 0,
-            child: _RoundButton(
-              glyph: AppGlyphs.remove,
-              tooltip:
-                  '${context.appLocalizations.remove} ${item.label(context)}',
-              background: colorScheme.errorContainer,
-              foreground: colorScheme.onErrorContainer,
+            child: DashboardRemoveButton(
+              label: item.label(context),
               onPressed: onRemove,
             ),
           ),
@@ -514,8 +514,8 @@ class _LiftedCard extends StatelessWidget {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
+class DashboardSectionLabel extends StatelessWidget {
+  const DashboardSectionLabel(this.text, {super.key});
 
   final String text;
 
@@ -533,8 +533,32 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _AddRow extends StatelessWidget {
-  const _AddRow({required this.item, required this.onAdd});
+/// The round badge that removes a card while the dashboard is edited.
+class DashboardRemoveButton extends StatelessWidget {
+  const DashboardRemoveButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = context.colorScheme;
+    return _RoundButton(
+      glyph: AppGlyphs.remove,
+      tooltip: '${context.appLocalizations.remove} $label',
+      background: colorScheme.errorContainer,
+      foreground: colorScheme.onErrorContainer,
+      onPressed: onPressed,
+    );
+  }
+}
+
+class DashboardAddRow extends StatelessWidget {
+  const DashboardAddRow({super.key, required this.item, required this.onAdd});
 
   final DashboardWidget item;
   final VoidCallback onAdd;

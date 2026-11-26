@@ -111,54 +111,49 @@ String _titleOf(BuildContext context, TakeoverSwitch kind) => switch (kind) {
   TakeoverSwitch.tun => context.appLocalizations.tun,
 };
 
-/// Both switches in one card, for the card list of a narrow window.
-class NetworkTakeoverCard extends StatelessWidget {
-  const NetworkTakeoverCard({super.key});
+/// One switch as a card of its own, in the narrow window's card list.
+class _TakeoverCard extends StatelessWidget {
+  const _TakeoverCard(this.kind);
+
+  final TakeoverSwitch kind;
 
   @override
   Widget build(BuildContext context) {
     const metrics = _cardRowMetrics;
-    final appLocalizations = context.appLocalizations;
     return DashboardCard(
-      semanticLabel: appLocalizations.networkTakeover,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          DashboardCardHeader(
-            glyph: AppGlyphs.shuffle,
-            title: appLocalizations.networkTakeover,
+      semanticLabel: _titleOf(context, kind),
+      child: LayoutBuilder(
+        builder: (context, constraints) => _TakeoverRow(
+          kind: kind,
+          metrics: metrics,
+          showIcon: DashboardSwitchRow.iconFits(
+            context,
+            width: constraints.maxWidth,
+            iconSize: metrics.icon,
+            padding: metrics.padding,
+            titles: [
+              for (final kind in TakeoverSwitch.values) _titleOf(context, kind),
+            ],
           ),
-          const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final showIcon = DashboardSwitchRow.iconFits(
-                context,
-                width: constraints.maxWidth,
-                iconSize: metrics.icon,
-                padding: metrics.padding,
-                titles: [
-                  for (final kind in TakeoverSwitch.values)
-                    _titleOf(context, kind),
-                ],
-              );
-              return Column(
-                spacing: 8,
-                children: [
-                  for (final kind in TakeoverSwitch.values)
-                    _TakeoverRow(
-                      kind: kind,
-                      metrics: metrics,
-                      showIcon: showIcon,
-                    ),
-                ],
-              );
-            },
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+class SystemProxyCard extends StatelessWidget {
+  const SystemProxyCard({super.key});
+
+  @override
+  Widget build(BuildContext context) =>
+      const _TakeoverCard(TakeoverSwitch.systemProxy);
+}
+
+class TunCard extends StatelessWidget {
+  const TunCard({super.key});
+
+  @override
+  Widget build(BuildContext context) => const _TakeoverCard(TakeoverSwitch.tun);
 }
 
 /// One switch as a card of its own, in the desktop's control row.

@@ -92,6 +92,25 @@ Future<ProviderContainer> pumpApp(WidgetTester tester, {Locale? locale}) async {
 
 /// The dialog blocks until the user answers, so tests must close it before
 /// awaiting the call that opened it.
+class _FailingAdapter implements HttpClientAdapter {
+  _FailingAdapter(this.onFetch);
+
+  final void Function() onFetch;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    onFetch();
+    throw StateError('asked GitHub for ${options.uri}');
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
 Future<void> tapCancel(WidgetTester tester) async {
   await tester.tap(find.byType(TextButton).first);
   await tester.pumpAndSettle();
@@ -159,7 +178,7 @@ void main() {
     await shown;
   });
 
-  testWidgets('stops reminding when an automatic check is dismissed', (
+  testWidgets('a version skipped in an automatic check stays skipped', (
     tester,
   ) async {
     final container = await pumpApp(tester);
@@ -171,7 +190,43 @@ void main() {
     await tapCancel(tester);
     await shown;
 
-    expect(container.read(appSettingProvider).autoCheckUpdate, isFalse);
+    expect(container.read(appSettingProvider).skippedUpdateVersion, 'v0.8.96');
+    expect(container.read(appSettingProvider).autoCheckUpdate, isTrue);
+  });
+
+  testWidgets('a skipped version is not asked about again', (tester) async {
+    final container = await pumpApp(tester);
+    container
+        .read(appSettingProvider.notifier)
+        .update((state) => state.copyWith(skippedUpdateVersion: 'v0.8.96'));
+
+    final shown = container
+        .read(commonActionProvider.notifier)
+        .checkUpdateResultHandle(data: release(_bodyWith(_payload)));
+    await tester.pumpAndSettle();
+    await shown;
+
+    expect(find.byType(TextButton), findsNothing);
+  });
+
+  testWidgets('a disabled update check asks GitHub nothing', (tester) async {
+    final container = await pumpApp(tester);
+    container
+        .read(appSettingProvider.notifier)
+        .update((state) => state.copyWith(disableUpdateCheck: true));
+    final adapter = request.dio.httpClientAdapter;
+    addTearDown(() => request.dio.httpClientAdapter = adapter);
+    var called = false;
+    request.dio.httpClientAdapter = _FailingAdapter(() => called = true);
+
+    final asked = await container
+        .read(commonActionProvider.notifier)
+        .autoCheckUpdate();
+    await tester.pumpAndSettle();
+
+    expect(asked, isFalse);
+    expect(called, isFalse);
+    expect(find.byType(TextButton), findsNothing);
   });
 
   group('a build that updates itself', () {
@@ -277,9 +332,7 @@ void main() {
       await tester.pump();
 
       expect(container.read(updateDownloadStateProvider), isNull);
-      expect(launched, [
-        Uri.parse('https://github.com/$repository/releases/latest'),
-      ]);
+      expect(launched, [Uri.parse('https://github.com/$repository/releases')]);
       expect(
         printed,
         contains(

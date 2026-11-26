@@ -9,7 +9,9 @@ import 'package:fl_clash/common/constant.dart';
 import 'package:fl_clash/common/exception.dart';
 import 'package:fl_clash/common/release_asset.dart';
 import 'package:fl_clash/common/request.dart';
+import 'package:fl_clash/state.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class _StalledHttpClient extends Fake implements HttpClient {
   @override
@@ -63,6 +65,15 @@ class _PathAdapter implements HttpClientAdapter {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUp(() {
+    globalState.packageInfo = PackageInfo(
+      appName: 'FlClash',
+      packageName: 'com.follow.clash',
+      version: '0.9.4',
+      buildNumber: '2026112401',
+    );
+  });
+
   test('getTextResponseForUrl propagates the typed DioException', () async {
     // flutter_test's mocked HttpClient answers every request with HTTP 400,
     // which Dio surfaces as a badResponse DioException.
@@ -99,7 +110,8 @@ void main() {
     test('reads the release from the API', () async {
       final request = requestAnswering({
         'api.github.com': () => ResponseBody.fromString(
-          '{"tag_name":"v1.2.3","body":"notes"}',
+          '[{"tag_name":"v1.2.2","body":"old"},'
+          '{"tag_name":"v1.2.3","body":"notes","draft":false}]',
           200,
           headers: {
             Headers.contentTypeHeader: [Headers.jsonContentType],
@@ -110,7 +122,59 @@ void main() {
       expect(await request.latestRelease(), {
         'tag_name': 'v1.2.3',
         'body': 'notes',
+        'draft': false,
       });
+    });
+
+    test('reads the newest release, drafts aside', () async {
+      final request = requestAnswering({
+        'api.github.com': () => ResponseBody.fromString(
+          '[{"tag_name":"v1.2.9","draft":false},'
+          '{"tag_name":"v1.2.10","prerelease":true},'
+          '{"tag_name":"v2.0.0","draft":true}]',
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        ),
+      });
+
+      expect(await request.latestRelease(), {
+        'tag_name': 'v1.2.10',
+        'prerelease': true,
+      });
+    });
+
+    test('a fork build is current when its tag names the same build', () async {
+      final request = requestAnswering({
+        'api.github.com': () => ResponseBody.fromString(
+          '[{"tag_name":"ssid-0.9.4-2026112401","draft":false},'
+          '{"tag_name":"ssid-0.9.4-2026112400","draft":false}]',
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        ),
+      });
+
+      expect(await request.checkForUpdate(), isNull);
+    });
+
+    test('a later fork build is an update', () async {
+      final request = requestAnswering({
+        'api.github.com': () => ResponseBody.fromString(
+          '[{"tag_name":"ssid-0.9.4-2026112402","draft":false}]',
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        ),
+      });
+
+      expect(
+        (await request.checkForUpdate())?['tag_name'],
+        'ssid-0.9.4-2026112402',
+      );
     });
 
     test(

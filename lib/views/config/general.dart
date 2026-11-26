@@ -5,6 +5,7 @@ import 'package:fl_clash/l10n/l10n.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/mitm.dart';
 import 'package:fl_clash/providers/providers.dart';
+import 'package:fl_clash/ui/icons/icons.dart';
 import 'package:fl_clash/views/config/on_demand.dart';
 import 'package:fl_clash/views/config/override.dart';
 import 'package:fl_clash/views/config/user_agents.dart';
@@ -238,14 +239,40 @@ ConfigToggleItem _appSettingToggle({
   required ConfigLabel title,
   required bool Function(AppSettingProps state) select,
   required AppSettingProps Function(AppSettingProps state, bool value) update,
+  ConfigLabel? subtitle,
+  bool enabled = true,
 }) {
   return ConfigToggleItem(
     title: title,
+    subtitle: subtitle,
     selector: appSettingProvider.select(select),
+    enabled: enabled,
     onChanged: (ref, value) => ref
         .read(appSettingProvider.notifier)
         .update((state) => update(state, value)),
   );
+}
+
+class _SkippedVersionItem extends ConsumerWidget {
+  const _SkippedVersionItem({required this.version});
+
+  final String version;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appLocalizations = context.appLocalizations;
+    return ListItem(
+      title: Text(appLocalizations.skippedVersion),
+      subtitle: Text(version),
+      trailing: DetailButton(
+        glyph: AppGlyphs.reset,
+        tooltip: appLocalizations.resumeUpdateReminder,
+        onPressed: () => ref
+            .read(appSettingProvider.notifier)
+            .update((state) => state.copyWith(skippedUpdateVersion: null)),
+      ),
+    );
+  }
 }
 
 class GeneralView extends ConsumerWidget {
@@ -359,7 +386,7 @@ class GeneralView extends ConsumerWidget {
     ];
   }
 
-  List<Widget> _requestItems() {
+  List<Widget> _requestItems(AppSettingProps setting) {
     return [
       const UaItem(),
       _appSettingToggle(
@@ -368,10 +395,19 @@ class GeneralView extends ConsumerWidget {
         update: (state, value) => state.copyWith(checkCertificate: value),
       ),
       _appSettingToggle(
-        title: (l) => l.autoCheckUpdate,
-        select: (state) => state.autoCheckUpdate,
-        update: (state, value) => state.copyWith(autoCheckUpdate: value),
+        title: (l) => l.disableUpdateCheck,
+        subtitle: (l) => l.disableUpdateCheckDesc,
+        select: (state) => state.disableUpdateCheck,
+        update: (state, value) => state.copyWith(disableUpdateCheck: value),
       ),
+      if (!setting.disableUpdateCheck)
+        _appSettingToggle(
+          title: (l) => l.autoCheckUpdate,
+          select: (state) => state.autoCheckUpdate,
+          update: (state, value) => state.copyWith(autoCheckUpdate: value),
+        ),
+      if (!setting.disableUpdateCheck && setting.skippedUpdateVersion != null)
+        _SkippedVersionItem(version: setting.skippedUpdateVersion!),
     ];
   }
 
@@ -405,6 +441,7 @@ class GeneralView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, ref) {
     final appLocalizations = context.appLocalizations;
+    final setting = ref.watch(appSettingProvider);
     final authentication = ref.watch(
       networkSettingProvider.select((state) => state.authentication.enable),
     );
@@ -431,7 +468,7 @@ class GeneralView extends ConsumerWidget {
           ),
           generateSection(
             title: appLocalizations.requestsAndUpdates,
-            items: _requestItems(),
+            items: _requestItems(setting),
             footer: appLocalizations.checkCertificateDesc,
           ),
           generateSection(

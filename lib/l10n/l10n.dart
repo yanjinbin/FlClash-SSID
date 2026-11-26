@@ -480,6 +480,36 @@ abstract class AppLocalizations {
   /// **'Auto check for updates'**
   String get autoCheckUpdate;
 
+  /// No description provided for @disableUpdateCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable update checks'**
+  String get disableUpdateCheck;
+
+  /// No description provided for @disableUpdateCheckDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'No new version is checked, reminded or offered, including the check in About.'**
+  String get disableUpdateCheckDesc;
+
+  /// No description provided for @skipThisVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip this version'**
+  String get skipThisVersion;
+
+  /// No description provided for @skippedVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped version'**
+  String get skippedVersion;
+
+  /// No description provided for @resumeUpdateReminder.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume reminders'**
+  String get resumeUpdateReminder;
+
   /// No description provided for @checkCertificate.
   ///
   /// In en, this message translates to:

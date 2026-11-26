@@ -42,6 +42,8 @@ _AppSettingProps _$AppSettingPropsFromJson(
       TabAnimation.fade,
   floatingNavigationBar: json['floatingNavigationBar'] as bool? ?? true,
   autoCheckUpdate: json['autoCheckUpdate'] as bool? ?? true,
+  disableUpdateCheck: json['disableUpdateCheck'] as bool? ?? false,
+  skippedUpdateVersion: json['skippedUpdateVersion'] as String?,
   sidebarExpanded:
       _readSidebarExpanded(json, 'sidebarExpanded') as bool? ?? true,
   acceptedDisclaimerVersion:
@@ -116,6 +118,8 @@ Map<String, dynamic> _$AppSettingPropsToJson(_AppSettingProps instance) =>
       'tabAnimation': _$TabAnimationEnumMap[instance.tabAnimation]!,
       'floatingNavigationBar': instance.floatingNavigationBar,
       'autoCheckUpdate': instance.autoCheckUpdate,
+      'disableUpdateCheck': instance.disableUpdateCheck,
+      'skippedUpdateVersion': instance.skippedUpdateVersion,
       'sidebarExpanded': instance.sidebarExpanded,
       'acceptedDisclaimerVersion': instance.acceptedDisclaimerVersion,
       'minimizeOnExit': instance.minimizeOnExit,
@@ -163,7 +167,8 @@ const _$DashboardWidgetEnumMap = {
   DashboardWidget.networkSpeed: 'networkSpeed',
   DashboardWidget.outboundMode: 'outboundMode',
   DashboardWidget.vpnButton: 'vpnButton',
-  DashboardWidget.networkTakeover: 'networkTakeover',
+  DashboardWidget.systemProxy: 'systemProxy',
+  DashboardWidget.tun: 'tun',
   DashboardWidget.wifiMode: 'wifiMode',
   DashboardWidget.serviceStatus: 'serviceStatus',
   DashboardWidget.profiles: 'profiles',
